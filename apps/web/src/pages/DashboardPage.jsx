@@ -1,35 +1,60 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 import Skeleton from "../components/ui/Skeleton";
 import { useToast } from "../components/ui/ToastProvider";
 import { apiFetch } from "../api";
 
+function formatDashboardError(message) {
+  const normalized = String(message || "").toLowerCase();
+  if (normalized.includes("invalid or expired token") || normalized.includes("jwt") || normalized.includes("unauthorized")) {
+    return "Authorization failed. Sign out and sign in again. If this continues, verify web and API use the same Supabase project keys.";
+  }
+  return message || "Failed to load sessions";
+}
+
 export default function DashboardPage({ session }) {
   const { pushToast } = useToast();
   const token = session?.access_token;
+  const lastToastMessageRef = useRef("");
   const [sessions, setSessions] = useState([]);
   const [title, setTitle] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
+  const showError = useCallback(
+    (message) => {
+      setError(message);
+      if (lastToastMessageRef.current !== message) {
+        pushToast(message, "error");
+        lastToastMessageRef.current = message;
+      }
+    },
+    [pushToast],
+  );
+
+  const clearError = useCallback(() => {
+    setError("");
+    lastToastMessageRef.current = "";
+  }, []);
+
   const loadSessions = useCallback(async () => {
     if (!token) {
       return;
     }
-    setError("");
+    clearError();
     setLoading(true);
     try {
       const data = await apiFetch("/api/sessions", token);
       setSessions(data.sessions || []);
     } catch (err) {
-      setError(err.message || "Failed to load sessions");
-      pushToast(err.message || "Failed to load sessions", "error");
+      const message = formatDashboardError(err.message);
+      showError(message);
     } finally {
       setLoading(false);
     }
-  }, [pushToast, token]);
+  }, [clearError, showError, token]);
 
   useEffect(() => {
     loadSessions();
@@ -42,7 +67,7 @@ export default function DashboardPage({ session }) {
     }
 
     setSubmitting(true);
-    setError("");
+    clearError();
     try {
       await apiFetch("/api/sessions", token, {
         method: "POST",
@@ -52,9 +77,8 @@ export default function DashboardPage({ session }) {
       pushToast("Session created", "success");
       await loadSessions();
     } catch (err) {
-      const message = err.message || "Failed to create session";
-      setError(message);
-      pushToast(message, "error");
+      const message = formatDashboardError(err.message || "Failed to create session");
+      showError(message);
     } finally {
       setSubmitting(false);
     }
@@ -89,7 +113,7 @@ export default function DashboardPage({ session }) {
         {error ? <div className="alert-error">{error}</div> : null}
       </section>
 
-      <section className="panel space-y-4">
+      <section id="sessions" className="panel space-y-4">
         <div className="flex items-center justify-between gap-3">
           <h3 className="text-lg font-semibold">Your Sessions</h3>
           <button type="button" onClick={loadSessions} className="btn-secondary">

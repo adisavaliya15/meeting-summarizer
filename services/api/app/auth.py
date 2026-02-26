@@ -1,4 +1,4 @@
-﻿from dataclasses import dataclass
+from dataclasses import dataclass
 
 import jwt
 from fastapi import Depends, HTTPException, status
@@ -27,6 +27,7 @@ def verify_token(token: str) -> dict:
             signing_key.key,
             algorithms=["RS256", "ES256"],
             options={"verify_aud": False},
+            leeway=60,
         )
         return payload
     except Exception as exc:  # noqa: BLE001

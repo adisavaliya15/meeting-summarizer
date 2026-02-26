@@ -2,9 +2,15 @@ import { useEffect, useState } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 
 import ProtectedRoute from "./components/ProtectedRoute";
-import AppShell from "./components/layout/AppShell";
+import AppLayout from "./components/layout/AppLayout";
+import PublicLayout from "./components/layout/PublicLayout";
 import DashboardPage from "./pages/DashboardPage";
 import LoginPage from "./pages/LoginPage";
+import ContactPage from "./pages/marketing/ContactPage";
+import LandingPage from "./pages/marketing/LandingPage";
+import PricingPage from "./pages/marketing/PricingPage";
+import ProductPage from "./pages/marketing/ProductPage";
+import ProfilePage from "./pages/ProfilePage";
 import SessionPage from "./pages/SessionPage";
 import { supabase } from "./supabase";
 
@@ -51,16 +57,24 @@ export default function App() {
 
   return (
     <Routes>
+      <Route element={<PublicLayout session={session} />}>
+        <Route path="/" element={<LandingPage session={session} />} />
+        <Route path="/product" element={<ProductPage />} />
+        <Route path="/pricing" element={<PricingPage />} />
+        <Route path="/contact" element={<ContactPage />} />
+      </Route>
+
       <Route path="/login" element={<LoginPage session={session} />} />
 
       <Route element={<ProtectedRoute session={session} />}>
-        <Route element={<AppShell session={session} onSignOut={handleSignOut} />}>
-          <Route path="/" element={<DashboardPage session={session} />} />
+        <Route element={<AppLayout session={session} onSignOut={handleSignOut} />}>
+          <Route path="/dashboard" element={<DashboardPage session={session} />} />
           <Route path="/sessions/:sessionId" element={<SessionPage session={session} />} />
+          <Route path="/profile" element={<ProfilePage session={session} onSignOut={handleSignOut} />} />
         </Route>
       </Route>
 
-      <Route path="*" element={<Navigate to={session ? "/" : "/login"} replace />} />
+      <Route path="*" element={<Navigate to={session ? "/dashboard" : "/"} replace />} />
     </Routes>
   );
 }

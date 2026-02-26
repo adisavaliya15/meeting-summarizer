@@ -417,7 +417,7 @@ export default function SessionPage({ session }) {
     try {
       await apiFetch(`/api/sessions/${sessionId}`, token, { method: "DELETE" });
       pushToast("Session deleted", "success");
-      navigate("/");
+      navigate("/dashboard");
     } catch (err) {
       const message = err.message || "Failed to delete session";
       setError(message);
@@ -464,7 +464,7 @@ export default function SessionPage({ session }) {
     <>
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <Link to="/" className="btn-secondary">
+          <Link to="/dashboard" className="btn-secondary">
             Back to Dashboard
           </Link>
           <button
@@ -574,3 +574,4 @@ export default function SessionPage({ session }) {
     </>
   );
 }
+
