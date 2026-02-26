@@ -32,10 +32,10 @@ export default function AppLayout({ session, onSignOut }) {
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-white text-slate-900 transition dark:from-slate-950 dark:via-slate-950 dark:to-slate-900 dark:text-slate-100">
+    <div className="min-h-screen text-slate-900 dark:text-slate-100">
       <div className="flex min-h-screen">
         <aside
-          className={`fixed inset-y-0 left-0 z-40 w-64 transform border-r border-slate-200 bg-white/90 p-5 backdrop-blur transition dark:border-slate-800 dark:bg-slate-950/90 md:static md:translate-x-0 ${
+          className={`fixed inset-y-0 left-0 z-40 w-64 transform border-r border-slate-200 bg-white/74 p-5 backdrop-blur-xl transition dark:border-slate-800 dark:bg-slate-950/72 md:static md:translate-x-0 ${
             sidebarOpen ? "translate-x-0" : "-translate-x-full"
           }`}
         >
@@ -63,12 +63,12 @@ export default function AppLayout({ session, onSignOut }) {
         ) : null}
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/85 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-950/85 md:px-6">
+          <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/70 px-4 py-3 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/70 md:px-6">
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 <button
                   type="button"
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 md:hidden"
+                  className="btn-secondary px-3 md:hidden"
                   onClick={() => setSidebarOpen(true)}
                 >
                   Menu
@@ -80,17 +80,14 @@ export default function AppLayout({ session, onSignOut }) {
               </div>
 
               <div className="flex items-center gap-2">
-                <Link
-                  to="/"
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-                >
+                <Link to="/" className="btn-secondary px-3">
                   Home
                 </Link>
 
                 <button
                   type="button"
                   onClick={toggleTheme}
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                  className="btn-secondary px-3"
                 >
                   {theme === "dark" ? "Light" : "Dark"}
                 </button>
@@ -99,13 +96,13 @@ export default function AppLayout({ session, onSignOut }) {
                   <button
                     type="button"
                     onClick={() => setUserMenuOpen((open) => !open)}
-                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                    className="btn-secondary px-3"
                   >
                     {session?.user?.email?.split("@")[0] || "User"}
                   </button>
 
                   {userMenuOpen ? (
-                    <div className="absolute right-0 mt-2 w-56 rounded-xl border border-slate-200 bg-white p-2 shadow-soft dark:border-slate-700 dark:bg-slate-900">
+                    <div className="absolute right-0 mt-2 w-56 rounded-xl border border-slate-200 bg-white/95 p-2 shadow-elevated backdrop-blur-xl dark:border-slate-700 dark:bg-slate-900/95">
                       <p className="rounded-lg px-3 py-2 text-xs text-slate-500 dark:text-slate-300">{session?.user?.email}</p>
                       <NavLink
                         to="/profile"
@@ -127,8 +124,10 @@ export default function AppLayout({ session, onSignOut }) {
             </div>
           </header>
 
-          <main className="flex-1 px-4 py-5 md:px-6 md:py-6">
-            <Outlet />
+          <main className="route-stage flex-1 px-4 py-5 md:px-6 md:py-6">
+            <div key={location.pathname} className="route-transition">
+              <Outlet />
+            </div>
           </main>
         </div>
       </div>

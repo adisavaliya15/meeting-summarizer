@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, NavLink, Outlet } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 
 import Footer from "../marketing/Footer";
 import Button from "../ui/Button";
@@ -16,11 +16,12 @@ function navClass({ isActive }) {
 
 export default function PublicLayout({ session }) {
   const { theme, toggleTheme } = useTheme();
+  const location = useLocation();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-100 text-slate-900 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900 dark:text-slate-100">
-      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/85 backdrop-blur dark:border-slate-800 dark:bg-slate-950/85">
+    <div className="min-h-screen text-slate-900 dark:text-slate-100">
+      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/75 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/72">
         <SectionContainer className="flex h-16 items-center justify-between gap-4">
           <Link to="/" className="inline-flex items-center gap-2 text-lg font-bold text-brand-600 dark:text-brand-200">
             <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 text-sm text-white">SO</span>
@@ -37,7 +38,7 @@ export default function PublicLayout({ session }) {
             <button
               type="button"
               onClick={toggleTheme}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+              className="btn-secondary px-3"
             >
               {theme === "dark" ? "Light" : "Dark"}
             </button>
@@ -45,7 +46,7 @@ export default function PublicLayout({ session }) {
             <button
               type="button"
               onClick={() => setMobileNavOpen((prev) => !prev)}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800 md:hidden"
+              className="btn-secondary px-3 md:hidden"
             >
               Menu
             </button>
@@ -93,8 +94,10 @@ export default function PublicLayout({ session }) {
         ) : null}
       </header>
 
-      <main>
-        <Outlet />
+      <main className="route-stage">
+        <div key={location.pathname} className="route-transition">
+          <Outlet />
+        </div>
       </main>
 
       <Footer />

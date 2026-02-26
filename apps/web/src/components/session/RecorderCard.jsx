@@ -73,10 +73,10 @@ export default function RecorderCard({
           type="button"
           onClick={isRecording ? onStop : onStart}
           disabled={busy && !isRecording}
-          className="group relative inline-flex h-28 w-28 items-center justify-center rounded-full bg-brand-600 text-white shadow-soft transition hover:scale-[1.02] hover:bg-brand-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-60"
+          className="record-button group relative inline-flex h-28 w-28 items-center justify-center rounded-full bg-brand-600 text-white transition hover:scale-[1.02] hover:bg-brand-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isRecording ? <span className="relative z-10 h-7 w-7 rounded bg-white" /> : <span className="relative z-10 text-sm font-semibold">REC</span>}
-          {isRecording ? <span className="absolute inset-0 animate-ping rounded-full bg-brand-400/80" /> : null}
+          {isRecording ? <span className="record-pulse" /> : null}
         </button>
 
         <div className="flex-1 space-y-3">

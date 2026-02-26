@@ -10,12 +10,12 @@ const ToastContext = createContext(null);
 
 function toastStyles(type) {
   if (type === "error") {
-    return "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-500/40 dark:bg-rose-900/30 dark:text-rose-100";
+    return "toast-item toast-error";
   }
   if (type === "success") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-900/30 dark:text-emerald-100";
+    return "toast-item toast-success";
   }
-  return "border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100";
+  return "toast-item";
 }
 
 export function ToastProvider({ children }) {
@@ -43,14 +43,15 @@ export function ToastProvider({ children }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div className="pointer-events-none fixed right-4 top-4 z-[100] flex w-[min(360px,92vw)] flex-col gap-2">
+      <div className="pointer-events-none fixed right-4 top-4 z-[100] flex w-[min(380px,92vw)] flex-col gap-2.5">
         {toasts.map((toast) => (
           <div
             key={toast.id}
-            className={`pointer-events-auto rounded-xl border px-4 py-3 shadow-soft transition ${toastStyles(toast.type)}`}
+            className={`pointer-events-auto px-4 py-3 transition ${toastStyles(toast.type)}`}
+            data-type={toast.type}
           >
             <div className="flex items-start justify-between gap-3">
-              <p className="text-sm font-medium">{toast.message}</p>
+              <p className="text-sm font-medium leading-6">{toast.message}</p>
               <button
                 type="button"
                 onClick={() => removeToast(toast.id)}

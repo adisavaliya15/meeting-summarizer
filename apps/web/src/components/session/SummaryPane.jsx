@@ -237,6 +237,7 @@ export default function SummaryPane({ activeTab, onTabChange, selectedChunk, ses
     () => normalizeFinalSummary(finalSummary, finalSummaryMd),
     [finalSummary, finalSummaryMd]
   );
+  const activeTabIndex = Math.max(0, TABS.findIndex((tab) => tab.id === activeTab));
 
   async function copyContent(text, label) {
     try {
@@ -262,7 +263,7 @@ export default function SummaryPane({ activeTab, onTabChange, selectedChunk, ses
           <p className="text-sm text-slate-500 dark:text-slate-300">Chunk {selectedChunk.idx} transcript</p>
           <button type="button" className="btn-secondary" onClick={() => copyContent(transcriptText, "Transcript")}>Copy</button>
         </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm leading-7 text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+        <div className="readable-block">
           {transcriptText}
         </div>
         {transcriptSegments.length > 0 ? (
@@ -270,7 +271,7 @@ export default function SummaryPane({ activeTab, onTabChange, selectedChunk, ses
             <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Timestamped Segments</h4>
             <div className="mt-3 max-h-64 space-y-2 overflow-y-auto text-sm">
               {transcriptSegments.map((segment, index) => (
-                <p key={`segment-${index}`} className="rounded-xl bg-slate-50 px-3 py-2 text-slate-600 dark:bg-slate-800 dark:text-slate-200">
+                <p key={`segment-${index}`} className="transcript-segment">
                   [{segment.start}s - {segment.end}s] {segment.text}
                 </p>
               ))}
@@ -367,17 +368,13 @@ export default function SummaryPane({ activeTab, onTabChange, selectedChunk, ses
 
   return (
     <section className="panel space-y-4">
-      <div className="flex flex-wrap gap-2">
+      <div className="tabs-rail" style={{ "--tab-count": TABS.length, "--tab-index": activeTabIndex }}>
         {TABS.map((tab) => (
           <button
             key={tab.id}
             type="button"
             onClick={() => onTabChange(tab.id)}
-            className={`rounded-xl px-3 py-2 text-sm font-semibold transition ${
-              activeTab === tab.id
-                ? "bg-brand-600 text-white"
-                : "bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-            }`}
+            className={`tab-pill ${activeTab === tab.id ? "is-active" : ""}`}
           >
             {tab.label}
           </button>
