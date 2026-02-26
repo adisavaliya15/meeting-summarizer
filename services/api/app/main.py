@@ -1,4 +1,4 @@
-﻿import uuid
+import uuid
 from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, status
@@ -10,7 +10,7 @@ from .auth import CurrentUser, get_current_user
 from .config import settings, validate_settings
 from .db import get_db_conn
 from .models import ChunkInitRequest, ChunkUploadedRequest, SessionCreateRequest
-from .supabase_storage import create_signed_upload_url
+from .supabase_storage import create_signed_upload_url, delete_storage_object
 
 validate_settings()
 
@@ -121,6 +121,69 @@ def get_session(
         ).fetchall()
 
     return {"session": session, "chunks": chunks, "jobs": jobs}
+
+
+@app.delete("/api/sessions/{session_id}")
+def delete_session(
+    session_id: uuid.UUID,
+    current_user: CurrentUser = Depends(get_current_user),
+) -> dict[str, Any]:
+    storage_objects: list[dict[str, Any]] = []
+
+    with get_db_conn() as conn:
+        session = conn.execute(
+            "select id from sessions where id = %s and owner_id = %s",
+            (session_id, current_user.id),
+        ).fetchone()
+        if not session:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+
+        storage_objects = conn.execute(
+            """
+            select storage_bucket, storage_key
+            from chunks
+            where session_id = %s and owner_id = %s
+            """,
+            (session_id, current_user.id),
+        ).fetchall()
+
+        conn.execute(
+            """
+            delete from jobs j
+            where j.owner_id = %s
+              and (
+                j.payload->>'session_id' = %s
+                or (
+                  j.payload ? 'chunk_id'
+                  and exists (
+                    select 1
+                    from chunks c
+                    where c.session_id = %s
+                      and c.id = (j.payload->>'chunk_id')::uuid
+                  )
+                )
+              )
+            """,
+            (current_user.id, str(session_id), session_id),
+        )
+
+        conn.execute(
+            "delete from sessions where id = %s and owner_id = %s",
+            (session_id, current_user.id),
+        )
+        conn.commit()
+
+    for obj in storage_objects:
+        storage_key = obj.get("storage_key")
+        if not storage_key:
+            continue
+        try:
+            delete_storage_object(obj["storage_bucket"], storage_key)
+        except Exception:
+            # Best effort cleanup; DB deletion already committed.
+            continue
+
+    return {"deleted": True, "session_id": str(session_id)}
 
 
 @app.post("/api/sessions/{session_id}/finalize")
@@ -250,6 +313,55 @@ def init_chunk(
         "signed_upload_url": signed["signed_upload_url"],
         "signed_upload_token": signed.get("signed_upload_token"),
     }
+
+
+@app.delete("/api/chunks/{chunk_id}")
+def delete_chunk(
+    chunk_id: uuid.UUID,
+    current_user: CurrentUser = Depends(get_current_user),
+) -> dict[str, Any]:
+    storage_bucket = "recordings"
+    storage_key = None
+
+    with get_db_conn() as conn:
+        chunk = conn.execute(
+            """
+            select id, storage_bucket, storage_key
+            from chunks
+            where id = %s and owner_id = %s
+            """,
+            (chunk_id, current_user.id),
+        ).fetchone()
+
+        if not chunk:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chunk not found")
+
+        storage_bucket = chunk["storage_bucket"]
+        storage_key = chunk["storage_key"]
+
+        conn.execute(
+            """
+            delete from jobs
+            where owner_id = %s
+              and payload->>'chunk_id' = %s
+            """,
+            (current_user.id, str(chunk_id)),
+        )
+
+        conn.execute(
+            "delete from chunks where id = %s and owner_id = %s",
+            (chunk_id, current_user.id),
+        )
+        conn.commit()
+
+    if storage_key:
+        try:
+            delete_storage_object(storage_bucket, storage_key)
+        except Exception:
+            # Best effort cleanup; DB deletion already committed.
+            pass
+
+    return {"deleted": True, "chunk_id": str(chunk_id)}
 
 
 @app.post("/api/chunks/{chunk_id}/uploaded")

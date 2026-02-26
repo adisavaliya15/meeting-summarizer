@@ -1,4 +1,4 @@
-﻿from urllib.parse import quote
+from urllib.parse import quote
 
 import requests
 
@@ -41,3 +41,17 @@ def create_signed_upload_url(bucket: str, storage_key: str) -> dict:
         "signed_upload_url": signed_upload_url,
         "signed_upload_token": token,
     }
+
+
+def delete_storage_object(bucket: str, storage_key: str) -> None:
+    encoded_key = quote(storage_key, safe="/")
+    endpoint = f"{settings.supabase_url}/storage/v1/object/{bucket}/{encoded_key}"
+    headers = {
+        "Authorization": f"Bearer {settings.supabase_service_role_key}",
+        "apikey": settings.supabase_service_role_key,
+    }
+
+    response = requests.delete(endpoint, headers=headers, timeout=20)
+    if response.status_code in {200, 204, 404}:
+        return
+    response.raise_for_status()

@@ -348,3 +348,63 @@ You should see logs like:
 - Worker uses service-role credentials and bypasses RLS for internal processing.
 - Clients cannot mutate `jobs` table by default; they can only read their own jobs.
 - Jobs are durable in Postgres (no Redis required).
+
+## Start All Services (One Command)
+
+From repo root (`d:\Projects\meeting-summarizer`), run this in PowerShell to open three terminals:
+
+```powershell
+Start-Process powershell -ArgumentList '-NoExit', '-Command', 'cd "d:\Projects\meeting-summarizer\services\api"; .\.venv\Scripts\Activate.ps1; uvicorn app.main:app --reload --host 0.0.0.0 --port 8000'
+Start-Process powershell -ArgumentList '-NoExit', '-Command', 'cd "d:\Projects\meeting-summarizer\services\worker"; .\.venv\Scripts\Activate.ps1; python worker.py'
+Start-Process powershell -ArgumentList '-NoExit', '-Command', 'cd "d:\Projects\meeting-summarizer\apps\web"; npm run dev'
+```
+
+Manual equivalent (three terminals):
+
+```powershell
+# Terminal 1 (API)
+
+# 1) API deps + run
+cd d:\Projects\meeting-summarizer\services\api
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+cd d:\Projects\meeting-summarizer\services\api
+.\.venv\Scripts\Activate
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+# Terminal 2 (Worker)
+# 2) Worker deps + run
+cd d:\Projects\meeting-summarizer\services\worker
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe worker.py
+
+cd d:\Projects\meeting-summarizer\services\worker
+.\.venv\Scripts\Activate
+python worker.py
+
+# Terminal 3 (Web)
+# 3) npm install
+cd d:\Projects\meeting-summarizer\apps\web
+npm run dev
+```
+
+## New: Delete + Auto-Chunk Behavior
+
+### Delete actions
+
+- You can delete a single chunk from the Session page (`Delete` button on each chunk card).
+- You can delete the whole session from the Session page (`Delete Session`).
+- API routes added:
+  - `DELETE /api/chunks/{chunk_id}`
+  - `DELETE /api/sessions/{session_id}`
+- Deleting a chunk/session removes related jobs and attempts to remove associated audio objects from Supabase Storage.
+
+### Automatic 15-minute chunking
+
+- Recording now uses `MediaRecorder.start(900000)` (`900000 ms = 15 minutes`).
+- While recording, the browser emits and uploads one chunk every 15 minutes automatically.
+- When you stop recording, the final partial chunk is emitted and uploaded too.
+- Chunk indexes are assigned sequentially so long recordings are split into ordered chunks (`0, 1, 2, ...`).
