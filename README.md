@@ -449,6 +449,14 @@ npm run dev -- --host
 - When you stop recording, the final partial chunk is emitted and uploaded too.
 - Chunk indexes are assigned sequentially so long recordings are split into ordered chunks (`0, 1, 2, ...`).
 
+### Manual audio upload with same chunk pipeline
+
+- Session page supports manual audio upload in the Recorder panel (`Upload Audio`).
+- Uploaded audio follows the same chunk sequence logic as recording:
+  - If chunk `0` and `1` exist, next uploaded audio starts at chunk `2`.
+- If uploaded audio is longer than 10 minutes, browser splits it into multiple chunks before upload.
+- Each uploaded chunk uses the same backend flow (`/chunks/init` -> signed upload -> `/uploaded` -> worker transcribe/summarize).
+
 ## Frontend UI Revamp Libraries (apps/web)
 
 Installed UI/UX libraries used for the production SaaS revamp:

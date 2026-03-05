@@ -1,4 +1,6 @@
-﻿from psycopg.types.json import Json
+from pathlib import Path
+
+from psycopg.types.json import Json
 
 from .finalize import finalize_session_summary, render_final_summary_markdown
 from .storage import download_object
@@ -60,7 +62,9 @@ def handle_transcribe_chunk(conn, job_payload: dict):
     conn.commit()
 
     audio_bytes = download_object(chunk["storage_bucket"], chunk["storage_key"])
-    transcript = transcribe_audio(audio_bytes)
+    raw_suffix = Path(str(chunk.get("storage_key") or "")).suffix.lower()
+    file_suffix = raw_suffix if raw_suffix else ".webm"
+    transcript = transcribe_audio(audio_bytes, file_suffix=file_suffix)
 
     conn.execute(
         """
@@ -76,7 +80,7 @@ def handle_transcribe_chunk(conn, job_payload: dict):
         conn,
         owner_id=str(chunk["owner_id"]),
         job_type="SUMMARIZE_CHUNK",
-        payload={"chunk_id": str(chunk_id), "session_id": str(chunk["session_id"])},
+        payload={"chunk_id": str(chunk_id), "session_id": str(chunk["session_id"])}
     )
     conn.commit()
 

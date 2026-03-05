@@ -29,6 +29,7 @@ const ACTIVE_CHUNK_STATUSES = new Set([
 
 const ACTIVE_JOB_STATUSES = new Set(["PENDING", "RUNNING"]);
 const AUTO_CHUNK_MS = 10 * 60 * 1000;
+const AUTO_CHUNK_SEC = AUTO_CHUNK_MS / 1000;
 
 export default function SessionPage({ session }) {
   const { sessionId } = useParams();
@@ -39,6 +40,7 @@ export default function SessionPage({ session }) {
   const [sessionData, setSessionData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
+  const [isPreparingManualUpload, setIsPreparingManualUpload] = useState(false);
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
@@ -79,7 +81,7 @@ export default function SessionPage({ session }) {
     (sessionData?.jobs || []).some((job) => ACTIVE_JOB_STATUSES.has(job.status));
 
   const allChunksSummarized = chunks.length > 0 && chunks.every((chunk) => Boolean(chunk.chunk_summary));
-  const busy = isUploading || isFinalizing || deletingSession || Boolean(deletingChunkId);
+  const busy = isUploading || isPreparingManualUpload || isFinalizing || deletingSession || Boolean(deletingChunkId);
   const isDeleteInFlight = deletingSession || Boolean(deletingChunkId);
 
   const loadSession = useCallback(async () => {
@@ -176,6 +178,117 @@ export default function SessionPage({ session }) {
     };
   }, [lastAudioUrl]);
 
+  function writeAscii(view, offset, value) {
+    for (let index = 0; index < value.length; index += 1) {
+      view.setUint8(offset + index, value.charCodeAt(index));
+    }
+  }
+
+  function createMonoWavBlobFromAudioSlice(audioBuffer, startFrame, endFrame) {
+    const frameStart = Math.max(0, startFrame);
+    const frameEnd = Math.max(frameStart + 1, Math.min(audioBuffer.length, endFrame));
+    const frameCount = frameEnd - frameStart;
+    const channelCount = Math.max(1, audioBuffer.numberOfChannels);
+    const sampleRate = audioBuffer.sampleRate;
+
+    const bytesPerSample = 2;
+    const monoChannelCount = 1;
+    const blockAlign = monoChannelCount * bytesPerSample;
+    const byteRate = sampleRate * blockAlign;
+    const dataSize = frameCount * blockAlign;
+    const buffer = new ArrayBuffer(44 + dataSize);
+    const view = new DataView(buffer);
+
+    writeAscii(view, 0, "RIFF");
+    view.setUint32(4, 36 + dataSize, true);
+    writeAscii(view, 8, "WAVE");
+    writeAscii(view, 12, "fmt ");
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true); // PCM
+    view.setUint16(22, monoChannelCount, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, byteRate, true);
+    view.setUint16(32, blockAlign, true);
+    view.setUint16(34, 16, true);
+    writeAscii(view, 36, "data");
+    view.setUint32(40, dataSize, true);
+
+    const channelData = Array.from({ length: channelCount }, (_, idx) => audioBuffer.getChannelData(idx));
+    let offset = 44;
+    for (let frame = frameStart; frame < frameEnd; frame += 1) {
+      let mixed = 0;
+      for (let channel = 0; channel < channelCount; channel += 1) {
+        mixed += channelData[channel][frame] || 0;
+      }
+      mixed /= channelCount;
+      const clamped = Math.max(-1, Math.min(1, mixed));
+      const int16 = clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff;
+      view.setInt16(offset, int16, true);
+      offset += 2;
+    }
+
+    return new Blob([buffer], { type: "audio/wav" });
+  }
+
+  async function decodeAudioFile(file) {
+    const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextCtor) {
+      throw new Error("Audio decoding is unavailable in this browser.");
+    }
+
+    const context = new AudioContextCtor();
+    try {
+      if (context.state === "suspended") {
+        await context.resume();
+      }
+      const bytes = await file.arrayBuffer();
+      const decoded = await context.decodeAudioData(bytes.slice(0));
+      return decoded;
+    } finally {
+      try {
+        await context.close();
+      } catch {
+        // no-op
+      }
+    }
+  }
+
+  async function splitFileIntoAudioChunks(file) {
+    const audioBuffer = await decodeAudioFile(file);
+    const totalDurationSec = audioBuffer.duration || 0;
+    if (totalDurationSec <= 0) {
+      throw new Error(`Unable to determine duration for ${file.name}`);
+    }
+
+    const totalFrames = audioBuffer.length;
+    const sampleRate = audioBuffer.sampleRate;
+    const chunksToCreate = Math.max(1, Math.ceil(totalDurationSec / AUTO_CHUNK_SEC));
+    const parts = [];
+
+    for (let partIndex = 0; partIndex < chunksToCreate; partIndex += 1) {
+      const startSec = partIndex * AUTO_CHUNK_SEC;
+      const endSec = Math.min(totalDurationSec, startSec + AUTO_CHUNK_SEC);
+      const startFrame = Math.floor(startSec * sampleRate);
+      const endFrame = Math.min(totalFrames, Math.ceil(endSec * sampleRate));
+      if (endFrame <= startFrame) {
+        continue;
+      }
+
+      const blob = createMonoWavBlobFromAudioSlice(audioBuffer, startFrame, endFrame);
+      const durationSec = (endFrame - startFrame) / sampleRate;
+      parts.push({
+        blob,
+        durationSec,
+      });
+    }
+
+    if (parts.length === 0) {
+      throw new Error(`No audio chunks created for ${file.name}`);
+    }
+
+    return parts;
+  }
+
   async function uploadChunkBlob(blob, durationSec, idx) {
     setError("");
 
@@ -236,6 +349,46 @@ export default function SessionPage({ session }) {
           setIsUploading(false);
         }
       });
+  }
+
+  async function handleManualAudioUpload(fileList) {
+    if (!fileList || fileList.length === 0) {
+      return;
+    }
+    if (isRecording) {
+      pushToast("Stop recording before uploading manual audio.", "error");
+      return;
+    }
+
+    setError("");
+    setCaptureNotice("");
+    setIsPreparingManualUpload(true);
+
+    try {
+      const files = Array.from(fileList);
+
+      for (const file of files) {
+        const chunksFromFile = await splitFileIntoAudioChunks(file);
+        chunksFromFile.forEach((chunkPart) => {
+          enqueueChunkUpload(chunkPart.blob, chunkPart.durationSec);
+        });
+
+        if (chunksFromFile.length > 1) {
+          pushToast(`${file.name} split into ${chunksFromFile.length} chunks and queued.`, "success");
+        } else {
+          pushToast(`${file.name} queued as one chunk.`, "success");
+        }
+      }
+
+      const nextIndex = Math.max(0, nextChunkIdxRef.current - 1);
+      setCaptureNotice(`Manual audio queued. Chunk numbering continues sequentially (latest queued index: ${nextIndex}).`);
+    } catch (err) {
+      const message = err.message || "Failed to prepare manual audio upload";
+      setError(message);
+      pushToast(message, "error");
+    } finally {
+      setIsPreparingManualUpload(false);
+    }
   }
 
   async function buildCaptureStream() {
@@ -568,12 +721,15 @@ export default function SessionPage({ session }) {
                 <RecorderCard
                   isRecording={isRecording}
                   isUploading={isUploading}
+                  isPreparingUpload={isPreparingManualUpload}
                   isProcessing={hasActiveProcessing || isFinalizing}
                   recordingSeconds={recordingSeconds}
                   includeSystemAudio={includeSystemAudio}
                   onToggleIncludeSystemAudio={setIncludeSystemAudio}
                   onStart={startRecording}
                   onStop={stopRecording}
+                  onUploadAudio={handleManualAudioUpload}
+                  disableUploadAudio={busy || isRecording}
                   onFinalize={finalizeSession}
                   canFinalize={allChunksSummarized}
                   busy={busy}

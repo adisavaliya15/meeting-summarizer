@@ -1,4 +1,5 @@
-import { CheckCircle2, CircleDot, LoaderCircle, Mic, StopCircle, Timer } from "lucide-react";
+import { useRef } from "react";
+import { CheckCircle2, CircleDot, LoaderCircle, Mic, StopCircle, Timer, Upload } from "lucide-react";
 
 import Badge from "../ui/Badge";
 import Button from "../ui/Button";
@@ -27,18 +28,39 @@ function Indicator({ active, label, tone }) {
 export default function RecorderCard({
   isRecording,
   isUploading,
+  isPreparingUpload,
   isProcessing,
   recordingSeconds,
   includeSystemAudio,
   onToggleIncludeSystemAudio,
   onStart,
   onStop,
+  onUploadAudio,
+  disableUploadAudio,
   onFinalize,
   canFinalize,
   busy,
   captureNotice,
   lastAudioUrl,
 }) {
+  const fileInputRef = useRef(null);
+
+  function openFilePicker() {
+    if (disableUploadAudio) {
+      return;
+    }
+    fileInputRef.current?.click();
+  }
+
+  function handleAudioInputChange(event) {
+    const files = event.target.files;
+    if (files && files.length > 0) {
+      onUploadAudio(files);
+    }
+    // Allow selecting the same file again.
+    event.target.value = "";
+  }
+
   return (
     <Card variant="panel" className="space-y-5 p-6">
       <div className="flex items-start justify-between gap-3">
@@ -61,6 +83,7 @@ export default function RecorderCard({
       <div className="flex flex-wrap items-center gap-2">
         <Indicator active={isRecording} label="Recording" tone="danger" />
         <Indicator active={isUploading} label="Uploading" tone="brand" />
+        <Indicator active={isPreparingUpload} label="Preparing upload" tone="brand" />
         <Indicator active={isProcessing} label="Processing" tone="warning" />
       </div>
 
@@ -107,6 +130,24 @@ export default function RecorderCard({
           </p>
 
           <div className="flex flex-wrap items-center gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="audio/*"
+              multiple
+              className="hidden"
+              onChange={handleAudioInputChange}
+              disabled={disableUploadAudio}
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={openFilePicker}
+              disabled={disableUploadAudio}
+            >
+              <Upload className="h-4 w-4" />
+              Upload Audio
+            </Button>
             <Button type="button" variant="secondary" onClick={onFinalize} disabled={!canFinalize || busy}>
               <CheckCircle2 className="h-4 w-4" />
               Finalize Session

@@ -45,6 +45,23 @@ def _normalize_note_title(title: str) -> str:
     return cleaned
 
 
+def _storage_extension_from_mime_type(mime_type: str) -> str:
+    normalized = (mime_type or "").split(";", 1)[0].strip().lower()
+    mapping = {
+        "audio/webm": ".webm",
+        "audio/wav": ".wav",
+        "audio/x-wav": ".wav",
+        "audio/mpeg": ".mp3",
+        "audio/mp3": ".mp3",
+        "audio/mp4": ".m4a",
+        "audio/aac": ".aac",
+        "audio/ogg": ".ogg",
+        "audio/opus": ".opus",
+        "audio/flac": ".flac",
+    }
+    return mapping.get(normalized, ".webm")
+
+
 @app.get("/api/notes")
 def list_notes(current_user: CurrentUser = Depends(get_current_user)) -> dict[str, Any]:
     with get_db_conn() as conn:
@@ -452,7 +469,8 @@ def init_chunk(
 ) -> dict[str, Any]:
     bucket = "recordings"
     chunk_id = uuid.uuid4()
-    storage_key = f"{current_user.id}/{session_id}/{chunk_id}.webm"
+    extension = _storage_extension_from_mime_type(body.mime_type)
+    storage_key = f"{current_user.id}/{session_id}/{chunk_id}{extension}"
 
     with get_db_conn() as conn:
         session = conn.execute(

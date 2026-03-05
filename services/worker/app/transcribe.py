@@ -16,10 +16,12 @@ def _get_model() -> WhisperModel:
     return _MODEL
 
 
-def transcribe_audio(audio_bytes: bytes) -> dict[str, Any]:
+def transcribe_audio(audio_bytes: bytes, file_suffix: str = ".webm") -> dict[str, Any]:
     model = _get_model()
 
-    with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as tmp:
+    suffix = file_suffix if isinstance(file_suffix, str) and file_suffix.startswith(".") else ".webm"
+
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
         tmp.write(audio_bytes)
         tmp_path = tmp.name
 
