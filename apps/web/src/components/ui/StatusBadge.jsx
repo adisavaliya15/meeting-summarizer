@@ -1,11 +1,13 @@
-const STYLE_MAP = {
-  UPLOADED: "status-badge status-uploaded",
-  TRANSCRIBED: "status-badge status-transcribed",
-  SUMMARIZED: "status-badge status-summarized",
-  FAILED: "status-badge status-failed",
+import Badge from "./Badge";
+
+const MAP = {
+  UPLOADED: "brand",
+  TRANSCRIBED: "warning",
+  SUMMARIZED: "success",
+  FAILED: "danger",
 };
 
 export default function StatusBadge({ status }) {
-  const resolved = STYLE_MAP[status] || STYLE_MAP.UPLOADED;
-  return <span className={resolved}>{status}</span>;
+  const tone = MAP[status] || "neutral";
+  return <Badge tone={tone}>{status}</Badge>;
 }

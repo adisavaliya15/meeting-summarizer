@@ -1,12 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { AlertTriangle, ArrowLeft, Trash2 } from "lucide-react";
 
+import { apiFetch } from "../api";
 import ChunkList from "../components/session/ChunkList";
 import RecorderCard from "../components/session/RecorderCard";
 import SummaryPane from "../components/session/SummaryPane";
+import Badge from "../components/ui/Badge";
+import Button from "../components/ui/Button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../components/ui/Dialog";
 import Skeleton from "../components/ui/Skeleton";
 import { useToast } from "../components/ui/ToastProvider";
-import { apiFetch } from "../api";
 
 const ACTIVE_CHUNK_STATUSES = new Set([
   "WAITING_UPLOAD",
@@ -17,7 +28,7 @@ const ACTIVE_CHUNK_STATUSES = new Set([
 ]);
 
 const ACTIVE_JOB_STATUSES = new Set(["PENDING", "RUNNING"]);
-const AUTO_CHUNK_MS = 15 * 60 * 1000;
+const AUTO_CHUNK_MS = 10 * 60 * 1000;
 
 export default function SessionPage({ session }) {
   const { sessionId } = useParams();
@@ -49,6 +60,8 @@ export default function SessionPage({ session }) {
   const startedAtRef = useRef(0);
   const chunkStartedAtRef = useRef(0);
   const timerRef = useRef(null);
+  const chunkFlushTimerRef = useRef(null);
+  const manualStopRef = useRef(false);
   const nextChunkIdxRef = useRef(0);
   const uploadQueueRef = useRef(Promise.resolve());
   const pendingUploadCountRef = useRef(0);
@@ -56,7 +69,10 @@ export default function SessionPage({ session }) {
   const sessionRow = sessionData?.session || null;
   const chunks = sessionData?.chunks || [];
 
-  const selectedChunk = useMemo(() => chunks.find((chunk) => chunk.id === selectedChunkId) || null, [chunks, selectedChunkId]);
+  const selectedChunk = useMemo(
+    () => chunks.find((chunk) => chunk.id === selectedChunkId) || null,
+    [chunks, selectedChunkId],
+  );
 
   const hasActiveProcessing =
     chunks.some((chunk) => ACTIVE_CHUNK_STATUSES.has(chunk.status)) ||
@@ -76,8 +92,7 @@ export default function SessionPage({ session }) {
       setSessionData(data);
       setError("");
     } catch (err) {
-      const message = err.message || "Failed to load session";
-      setError(message);
+      setError(err.message || "Failed to load session");
     } finally {
       setLoading(false);
     }
@@ -120,6 +135,13 @@ export default function SessionPage({ session }) {
     }
   }
 
+  function clearChunkFlushTimer() {
+    if (chunkFlushTimerRef.current) {
+      clearInterval(chunkFlushTimerRef.current);
+      chunkFlushTimerRef.current = null;
+    }
+  }
+
   function stopStream(streamRef) {
     const stream = streamRef.current;
     if (!stream) {
@@ -146,6 +168,7 @@ export default function SessionPage({ session }) {
   useEffect(() => {
     return () => {
       clearTimer();
+      clearChunkFlushTimer();
       cleanupCaptureResources();
       if (lastAudioUrl) {
         URL.revokeObjectURL(lastAudioUrl);
@@ -304,13 +327,30 @@ export default function SessionPage({ session }) {
       startedAtRef.current = Date.now();
       chunkStartedAtRef.current = Date.now();
       nextChunkIdxRef.current = chunks.length ? Math.max(...chunks.map((chunk) => chunk.idx)) + 1 : 0;
-      setCaptureNotice(`${capture.notice || "Recording started."} Chunks auto-upload every 15 minutes.`);
+      setCaptureNotice(`${capture.notice || "Recording started."} Chunks auto-upload every 10 minutes in background while recording stays live.`);
       setRecordingSeconds(0);
+      manualStopRef.current = false;
 
       clearTimer();
+      clearChunkFlushTimer();
       timerRef.current = setInterval(() => {
         setRecordingSeconds(Math.max(1, Math.floor((Date.now() - startedAtRef.current) / 1000)));
       }, 1000);
+
+      stream.getTracks().forEach((track) => {
+        track.onended = () => {
+          if (manualStopRef.current) {
+            return;
+          }
+          const activeRecorder = mediaRecorderRef.current;
+          if (activeRecorder && activeRecorder.state !== "inactive") {
+            setCaptureNotice("Capture stream ended unexpectedly. Recording stopped.");
+            setIsRecording(false);
+            pushToast("Capture stream ended. Recording stopped.", "error");
+            activeRecorder.stop();
+          }
+        };
+      });
 
       recorder.ondataavailable = (event) => {
         if (!event.data || event.data.size === 0) {
@@ -337,15 +377,31 @@ export default function SessionPage({ session }) {
 
       recorder.onstop = async () => {
         clearTimer();
+        clearChunkFlushTimer();
+        setIsRecording(false);
+        manualStopRef.current = false;
         await cleanupCaptureResources();
         await uploadQueueRef.current;
       };
 
-      recorder.start(AUTO_CHUNK_MS);
+      recorder.start();
+      chunkFlushTimerRef.current = setInterval(() => {
+        const activeRecorder = mediaRecorderRef.current;
+        if (!activeRecorder || activeRecorder.state !== "recording") {
+          return;
+        }
+        try {
+          activeRecorder.requestData();
+        } catch {
+          // no-op
+        }
+      }, AUTO_CHUNK_MS);
       setIsRecording(true);
       pushToast("Recording started", "info");
     } catch (err) {
       clearTimer();
+      clearChunkFlushTimer();
+      manualStopRef.current = false;
       await cleanupCaptureResources();
       const message = err.message || "Unable to start recording";
       setError(message);
@@ -359,6 +415,7 @@ export default function SessionPage({ session }) {
       return;
     }
     if (recorder.state !== "inactive") {
+      manualStopRef.current = true;
       recorder.stop();
     }
     setIsRecording(false);
@@ -417,7 +474,7 @@ export default function SessionPage({ session }) {
     try {
       await apiFetch(`/api/sessions/${sessionId}`, token, { method: "DELETE" });
       pushToast("Session deleted", "success");
-      navigate("/dashboard");
+      navigate("/sessions");
     } catch (err) {
       const message = err.message || "Failed to delete session";
       setError(message);
@@ -464,45 +521,54 @@ export default function SessionPage({ session }) {
     <>
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <Link to="/dashboard" className="btn-secondary">
-            Back to Dashboard
+          <Link to="/sessions">
+            <Button variant="secondary">
+              <ArrowLeft className="h-4 w-4" />
+              Back to Sessions
+            </Button>
           </Link>
-          <button
-            type="button"
-            onClick={openDeleteSessionPrompt}
-            disabled={busy || isRecording}
-            className="btn-secondary border-rose-300 text-rose-700 hover:bg-rose-50 disabled:opacity-60 dark:border-rose-500/40 dark:text-rose-200 dark:hover:bg-rose-900/30"
-          >
-            {deletingSession ? "Deleting..." : "Delete Session"}
-          </button>
+
+          <div className="flex items-center gap-2">
+            <Badge tone={hasActiveProcessing ? "warning" : "success"}>
+              {hasActiveProcessing ? "Processing" : "Up to date"}
+            </Badge>
+            <Button
+              variant="destructive"
+              onClick={openDeleteSessionPrompt}
+              disabled={busy || isRecording}
+            >
+              <Trash2 className="h-4 w-4" />
+              {deletingSession ? "Deleting..." : "Delete Session"}
+            </Button>
+          </div>
         </div>
 
         {error ? <div className="alert-error">{error}</div> : null}
 
         {loading ? (
-          <div className="grid gap-6 xl:grid-cols-[1fr_1.1fr]">
+          <div className="grid gap-6 xl:grid-cols-[380px_minmax(0,1fr)]">
             <div className="space-y-6">
-              <Skeleton className="h-72" />
+              <Skeleton className="h-[390px]" />
               <Skeleton className="h-[420px]" />
             </div>
-            <Skeleton className="h-[700px]" />
+            <Skeleton className="h-[820px]" />
           </div>
         ) : null}
 
         {!loading && sessionRow ? (
           <>
-            <section className="panel">
-              <p className="text-xs uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Session</p>
-              <h2 className="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">{sessionRow.title}</h2>
-              <p className="mt-2 text-sm text-slate-500 dark:text-slate-300">ID: {sessionRow.id}</p>
+            <section className="panel p-6">
+              <p className="text-xs uppercase tracking-[0.2em] text-muted">Session</p>
+              <h1 className="mt-3 text-4xl">{sessionRow.title}</h1>
+              <p className="mt-2 text-sm text-muted">ID: {sessionRow.id}</p>
             </section>
 
-            <div className="grid gap-6 xl:grid-cols-[1fr_1.1fr]">
+            <div className="grid gap-6 xl:grid-cols-[380px_minmax(0,1fr)]">
               <div className="space-y-6">
                 <RecorderCard
                   isRecording={isRecording}
                   isUploading={isUploading}
-                  isProcessing={hasActiveProcessing}
+                  isProcessing={hasActiveProcessing || isFinalizing}
                   recordingSeconds={recordingSeconds}
                   includeSystemAudio={includeSystemAudio}
                   onToggleIncludeSystemAudio={setIncludeSystemAudio}
@@ -536,42 +602,31 @@ export default function SessionPage({ session }) {
         ) : null}
       </div>
 
-      {confirmDialog ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <button
-            type="button"
-            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
-            onClick={closeConfirmDialog}
-            aria-label="Close delete confirmation"
-          />
-
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label={confirmDialog.title}
-            className="relative w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900"
-          >
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-rose-600 dark:text-rose-300">Confirm delete</p>
-            <h3 className="mt-2 text-xl font-semibold text-slate-900 dark:text-white">{confirmDialog.title}</h3>
-            <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">{confirmDialog.message}</p>
-
-            <div className="mt-6 flex items-center justify-end gap-3">
-              <button type="button" onClick={closeConfirmDialog} disabled={isDeleteInFlight} className="btn-secondary">
+      <Dialog open={Boolean(confirmDialog)} onOpenChange={(open) => (!open ? closeConfirmDialog() : undefined)}>
+        {confirmDialog ? (
+          <DialogContent showClose={!isDeleteInFlight}>
+            <DialogHeader>
+              <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-danger">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                Confirm delete
+              </p>
+              <DialogTitle>{confirmDialog.title}</DialogTitle>
+              <DialogDescription>{confirmDialog.message}</DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="secondary" onClick={closeConfirmDialog} disabled={isDeleteInFlight}>
                 Cancel
-              </button>
-              <button
-                type="button"
-                onClick={confirmDelete}
-                disabled={isDeleteInFlight}
-                className="rounded-xl border border-rose-300 bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-rose-500/40"
-              >
+              </Button>
+              <Button variant="destructive" onClick={confirmDelete} disabled={isDeleteInFlight}>
                 {isDeleteInFlight ? "Deleting..." : confirmDialog.confirmText}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        ) : null}
+      </Dialog>
     </>
   );
 }
+
+
 

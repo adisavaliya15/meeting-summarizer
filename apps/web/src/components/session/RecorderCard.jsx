@@ -1,3 +1,9 @@
+import { CheckCircle2, CircleDot, LoaderCircle, Mic, StopCircle, Timer } from "lucide-react";
+
+import Badge from "../ui/Badge";
+import Button from "../ui/Button";
+import Card from "../ui/Card";
+
 function formatTime(totalSeconds) {
   const mins = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
   const secs = String(totalSeconds % 60).padStart(2, "0");
@@ -5,22 +11,17 @@ function formatTime(totalSeconds) {
 }
 
 function Indicator({ active, label, tone }) {
-  const activeClass = {
-    red: "border-rose-300 bg-rose-100 text-rose-700 dark:border-rose-500/40 dark:bg-rose-900/30 dark:text-rose-200",
-    blue: "border-sky-300 bg-sky-100 text-sky-700 dark:border-sky-500/40 dark:bg-sky-900/30 dark:text-sky-200",
-    amber: "border-amber-300 bg-amber-100 text-amber-700 dark:border-amber-500/40 dark:bg-amber-900/30 dark:text-amber-200",
+  const colorMap = {
+    danger: "danger",
+    brand: "brand",
+    warning: "warning",
   };
-  return (
-    <span
-      className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${
-        active
-          ? activeClass[tone]
-          : "border-slate-200 bg-slate-100 text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400"
-      }`}
-    >
-      {label}
-    </span>
-  );
+
+  if (!active) {
+    return <Badge tone="neutral">{label}</Badge>;
+  }
+
+  return <Badge tone={colorMap[tone] || "brand"}>{label}</Badge>;
 }
 
 export default function RecorderCard({
@@ -39,70 +40,101 @@ export default function RecorderCard({
   lastAudioUrl,
 }) {
   return (
-    <section className="panel space-y-5">
+    <Card variant="panel" className="space-y-5 p-6">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold">Recorder</h2>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-300">Capture microphone and optional system audio. Long runs auto-split into 15-minute chunks.</p>
+          <h3>Recorder</h3>
+          <p className="mt-2 max-w-md text-sm text-muted">
+            Capture microphone and optional system audio. Long runs auto-split into 10-minute chunks.
+          </p>
         </div>
-        <div className="text-right">
-          <p className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Timer</p>
-          <p className="text-2xl font-semibold tabular-nums">{formatTime(recordingSeconds)}</p>
+
+        <div className="rounded-2xl border border-default bg-panel-2 px-4 py-3 text-right">
+          <p className="inline-flex items-center gap-1 text-xs uppercase tracking-[0.16em] text-muted">
+            <Timer className="h-3.5 w-3.5" />
+            Timer
+          </p>
+          <p className="mt-1 text-3xl font-semibold tabular-nums text-foreground">{formatTime(recordingSeconds)}</p>
         </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Indicator active={isRecording} label="Recording" tone="red" />
-        <Indicator active={isUploading} label="Uploading" tone="blue" />
-        <Indicator active={isProcessing} label="Processing" tone="amber" />
+        <Indicator active={isRecording} label="Recording" tone="danger" />
+        <Indicator active={isUploading} label="Uploading" tone="brand" />
+        <Indicator active={isProcessing} label="Processing" tone="warning" />
       </div>
 
-      <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium dark:border-slate-700 dark:bg-slate-900/40">
+      <label className="flex items-center gap-2 rounded-xl border border-default bg-panel-2 px-3 py-2 text-sm font-medium text-foreground">
         <input
           type="checkbox"
           checked={includeSystemAudio}
           onChange={(event) => onToggleIncludeSystemAudio(event.target.checked)}
           disabled={isRecording || busy}
-          className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+          className="h-4 w-4 rounded border-default accent-[var(--primary)]"
         />
         Include system/tab audio
       </label>
 
-      <div className="flex flex-wrap items-center gap-4">
+      <div className="flex flex-wrap items-center gap-5">
         <button
           type="button"
           onClick={isRecording ? onStop : onStart}
           disabled={busy && !isRecording}
-          className="record-button group relative inline-flex h-28 w-28 items-center justify-center rounded-full bg-brand-600 text-white transition hover:scale-[1.02] hover:bg-brand-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-60"
+          className={`relative inline-flex h-28 w-28 items-center justify-center rounded-full border border-default text-primary-foreground shadow-soft transition hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 ${
+            isRecording ? "bg-danger" : "bg-primary"
+          }`}
         >
-          {isRecording ? <span className="relative z-10 h-7 w-7 rounded bg-white" /> : <span className="relative z-10 text-sm font-semibold">REC</span>}
-          {isRecording ? <span className="record-pulse" /> : null}
+          {isRecording ? (
+            <>
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-white text-danger">
+                <StopCircle className="h-5 w-5" />
+              </span>
+              <span className="recorder-ring absolute inset-0 rounded-full" />
+            </>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-sm font-semibold">
+              <Mic className="h-4 w-4" />
+              REC
+            </span>
+          )}
         </button>
 
         <div className="flex-1 space-y-3">
-          <p className="text-sm text-slate-500 dark:text-slate-300">
+          <p className="text-sm text-muted">
             {isRecording
-              ? "Recording in progress. Chunks are uploaded every 15 minutes and once more when you stop."
+              ? "Recording in progress. Chunks upload every 10 minutes and once more when you stop."
               : "Ready for next chunk."}
           </p>
-          <button type="button" onClick={onFinalize} disabled={!canFinalize || busy} className="btn-secondary">
-            Finalize Session
-          </button>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="secondary" onClick={onFinalize} disabled={!canFinalize || busy}>
+              <CheckCircle2 className="h-4 w-4" />
+              Finalize Session
+            </Button>
+            {isUploading ? (
+              <span className="inline-flex items-center gap-2 rounded-full border border-default bg-panel-2 px-3 py-1 text-xs text-muted">
+                <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                Upload in progress
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-2 rounded-full border border-default bg-panel-2 px-3 py-1 text-xs text-muted">
+                <CircleDot className="h-3.5 w-3.5" />
+                Idle
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
-      {captureNotice ? (
-        <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300">
-          {captureNotice}
-        </p>
-      ) : null}
+      {captureNotice ? <p className="rounded-xl border border-default bg-panel-2 px-3 py-2 text-sm text-muted">{captureNotice}</p> : null}
 
       {lastAudioUrl ? (
         <div className="space-y-2">
-          <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Latest recording preview</p>
+          <p className="text-sm font-semibold text-foreground">Latest recording preview</p>
           <audio controls src={lastAudioUrl} className="w-full" />
         </div>
       ) : null}
-    </section>
+    </Card>
   );
 }
+

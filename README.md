@@ -21,6 +21,7 @@ meeting-summarizer/
 5. Worker transcribes each chunk with `faster-whisper`.
 6. Worker summarizes each transcript chunk using Ollama.
 7. User clicks Finalize, worker generates one combined summary from all chunk summaries.
+8. User can open global Manual Notes, create multiple named notes, autosave text, and optionally generate summaries per note.
 
 System audio capture note:
 
@@ -108,6 +109,37 @@ Worker reads all chunk summaries for one session and asks Ollama for a combined 
 ```
 
 Saved to `sessions.final_summary` and rendered markdown in `sessions.final_summary_md`.
+
+## Manual Notes (Global Workspace)
+
+Manual Notes is a user-level workspace available from the app sidebar (`/notes`).
+
+- Users can create multiple notes (`title` + `content`) per account.
+- Notes autosave in the background (debounced in UI).
+- Notes can be edited at any time from anywhere in the app shell.
+- `Summarize` is optional and user-triggered per note.
+- If note content changes after a summary exists, stored summary is cleared automatically to avoid stale summaries.
+
+### Database objects used
+
+- `manual_notes` table (many notes per user)
+- Columns:
+  - `title` (note name)
+  - `content` (raw note text)
+  - `summary` (JSON summary object)
+  - `summary_md` (rendered markdown form)
+  - `summarized_at`, `created_at`, `updated_at`
+- RLS is enabled and forced; users can only access their own row.
+- Trigger updates `updated_at` on every write.
+
+### Notes API endpoints
+
+- `GET /api/notes` (list notes)
+- `POST /api/notes` (create note)
+- `GET /api/notes/{note_id}` (fetch note)
+- `PUT /api/notes/{note_id}` (save title/content)
+- `DELETE /api/notes/{note_id}` (delete note)
+- `POST /api/notes/{note_id}/summarize` (generate and persist summary)
 
 ## Status Lifecycles
 
@@ -203,6 +235,8 @@ Set `services/api/.env` values:
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `SUPABASE_DB_URL`
+- `OLLAMA_URL` (default `http://localhost:11434`)
+- `OLLAMA_MODEL` (default `llama3.1:8b`)
 - `CORS_ORIGINS` (for local web app: `http://localhost:5173`)
 
 DB URL note:
@@ -239,7 +273,7 @@ Set `services/worker/.env` values:
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `SUPABASE_DB_URL` (same format as API)
 - `OLLAMA_URL` (default `http://localhost:11434`)
-- `WHISPER_MODEL` (default `small`)
+- `WHISPER_MODEL` (default `large-v3`, use `large-v3-turbo` for faster processing if available)
 - `OLLAMA_MODEL` (model served by your Ollama endpoint)
 - `POLL_INTERVAL_SEC`, `MAX_ATTEMPTS`, `WORKER_ID`
 
@@ -328,6 +362,12 @@ You should see logs like:
 ## API Route Reference
 
 - `GET /api/health`
+- `GET /api/notes`
+- `POST /api/notes`
+- `GET /api/notes/{note_id}`
+- `PUT /api/notes/{note_id}`
+- `DELETE /api/notes/{note_id}`
+- `POST /api/notes/{note_id}/summarize`
 - `POST /api/sessions`
 - `GET /api/sessions`
 - `GET /api/sessions/{session_id}`
@@ -388,7 +428,7 @@ python worker.py
 # Terminal 3 (Web)
 # 3) npm install
 cd d:\Projects\meeting-summarizer\apps\web
-npm run dev
+npm run dev -- --host
 ```
 
 ## New: Delete + Auto-Chunk Behavior
@@ -402,9 +442,34 @@ npm run dev
   - `DELETE /api/sessions/{session_id}`
 - Deleting a chunk/session removes related jobs and attempts to remove associated audio objects from Supabase Storage.
 
-### Automatic 15-minute chunking
+### Automatic 10-minute chunking
 
-- Recording now uses `MediaRecorder.start(900000)` (`900000 ms = 15 minutes`).
-- While recording, the browser emits and uploads one chunk every 15 minutes automatically.
+- Recording now uses a 10-minute rollover (`600000 ms = 10 minutes`) with `MediaRecorder.requestData()` while recording stays continuous.
+- While recording, the browser emits and uploads one chunk every 10 minutes automatically.
 - When you stop recording, the final partial chunk is emitted and uploaded too.
 - Chunk indexes are assigned sequentially so long recordings are split into ordered chunks (`0, 1, 2, ...`).
+
+## Frontend UI Revamp Libraries (apps/web)
+
+Installed UI/UX libraries used for the production SaaS revamp:
+
+- `framer-motion`
+- `lucide-react`
+- `@radix-ui/react-dialog`
+- `@radix-ui/react-tabs`
+- `@radix-ui/react-dropdown-menu`
+- `@radix-ui/react-tooltip`
+- `class-variance-authority`
+- `tailwind-merge`
+- `tailwindcss-animate`
+- `embla-carousel-react`
+- `react-hot-toast`
+
+Install command (already applied in this repo):
+
+```bash
+cd apps/web
+npm install framer-motion lucide-react @radix-ui/react-dialog @radix-ui/react-tabs @radix-ui/react-dropdown-menu @radix-ui/react-tooltip class-variance-authority tailwind-merge tailwindcss-animate embla-carousel-react react-hot-toast
+```
+
+

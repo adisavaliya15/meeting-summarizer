@@ -1,103 +1,109 @@
+import { AnimatePresence } from "framer-motion";
+import { Menu, Moon, Sparkles, Sun, X } from "lucide-react";
 import { useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 
+import PageTransition from "../motion/PageTransition";
 import Footer from "../marketing/Footer";
 import Button from "../ui/Button";
 import SectionContainer from "../ui/SectionContainer";
 import { useTheme } from "../ui/ThemeProvider";
 
-function navClass({ isActive }) {
-  return `rounded-lg px-3 py-2 text-sm font-medium transition ${
-    isActive
-      ? "bg-brand-100 text-brand-700 dark:bg-brand-900/40 dark:text-brand-200"
-      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
-  }`;
+function navItemClass({ isActive }) {
+  return isActive
+    ? "text-foreground font-semibold"
+    : "text-muted hover:text-foreground transition-colors";
 }
 
 export default function PublicLayout({ session }) {
-  const { theme, toggleTheme } = useTheme();
   const location = useLocation();
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const { theme, toggleTheme } = useTheme();
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  const authHref = session ? "/dashboard" : "/login";
+  const authLabel = session ? "Dashboard" : "Start Free";
 
   return (
-    <div className="min-h-screen text-slate-900 dark:text-slate-100">
-      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/75 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/72">
+    <div className="min-h-screen text-foreground">
+      <header className="sticky top-0 z-40 border-b border-default bg-panel backdrop-blur-xl">
         <SectionContainer className="flex h-16 items-center justify-between gap-4">
-          <Link to="/" className="inline-flex items-center gap-2 text-lg font-bold text-brand-600 dark:text-brand-200">
-            <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 text-sm text-white">SO</span>
-            Summora
+          <Link to="/" className="inline-flex items-center gap-2 font-bold text-lg">
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground text-sm">
+              so
+            </span>
+            <span>Summora</span>
           </Link>
 
-          <nav className="hidden items-center gap-1 md:flex">
-            <NavLink to="/product" className={navClass}>Product</NavLink>
-            <NavLink to="/pricing" className={navClass}>Pricing</NavLink>
-            <NavLink to="/contact" className={navClass}>Contact</NavLink>
+          <nav className="hidden items-center gap-8 md:flex">
+            <NavLink to="/product" className={navItemClass}>
+              Product
+            </NavLink>
+            <NavLink to="/pricing" className={navItemClass}>
+              Pricing
+            </NavLink>
+            <NavLink to="/contact" className={navItemClass}>
+              Contact
+            </NavLink>
           </nav>
 
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={toggleTheme}
-              className="btn-secondary px-3"
-            >
+          <div className="hidden items-center gap-2 md:flex">
+            <Button variant="secondary" size="sm" onClick={toggleTheme}>
+              {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
               {theme === "dark" ? "Light" : "Dark"}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setMobileNavOpen((prev) => !prev)}
-              className="btn-secondary px-3 md:hidden"
-            >
-              Menu
-            </button>
-
-            <div className="hidden md:block">
-              {session ? (
-                <Link to="/dashboard">
-                  <Button variant="primary">Dashboard</Button>
-                </Link>
-              ) : (
-                <Link to="/login">
-                  <Button variant="primary">Login</Button>
-                </Link>
-              )}
-            </div>
+            </Button>
+            <Link to={authHref}>
+              <Button size="sm">
+                <Sparkles className="h-4 w-4" />
+                {authLabel}
+              </Button>
+            </Link>
           </div>
+
+          <button
+            type="button"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-default bg-panel md:hidden"
+            onClick={() => setMenuOpen((prev) => !prev)}
+            aria-label="Toggle menu"
+          >
+            {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
         </SectionContainer>
 
-        {mobileNavOpen ? (
-          <SectionContainer className="border-t border-slate-200 py-3 dark:border-slate-800 md:hidden">
-            <div className="grid gap-1">
-              <NavLink to="/product" className={navClass} onClick={() => setMobileNavOpen(false)}>
-                Product
-              </NavLink>
-              <NavLink to="/pricing" className={navClass} onClick={() => setMobileNavOpen(false)}>
-                Pricing
-              </NavLink>
-              <NavLink to="/contact" className={navClass} onClick={() => setMobileNavOpen(false)}>
-                Contact
-              </NavLink>
-
-              <div className="pt-2">
-                {session ? (
-                  <Link to="/dashboard" onClick={() => setMobileNavOpen(false)}>
-                    <Button variant="primary" className="w-full">Dashboard</Button>
+        <AnimatePresence>
+          {menuOpen ? (
+            <PageTransition className="border-t border-default md:hidden">
+              <SectionContainer className="space-y-2 py-3">
+                <NavLink onClick={() => setMenuOpen(false)} to="/product" className="block rounded-xl px-3 py-2 text-muted hover:bg-panel-2">
+                  Product
+                </NavLink>
+                <NavLink onClick={() => setMenuOpen(false)} to="/pricing" className="block rounded-xl px-3 py-2 text-muted hover:bg-panel-2">
+                  Pricing
+                </NavLink>
+                <NavLink onClick={() => setMenuOpen(false)} to="/contact" className="block rounded-xl px-3 py-2 text-muted hover:bg-panel-2">
+                  Contact
+                </NavLink>
+                <div className="flex items-center gap-2 pt-1">
+                  <Button variant="secondary" size="sm" className="flex-1" onClick={toggleTheme}>
+                    {theme === "dark" ? "Light" : "Dark"}
+                  </Button>
+                  <Link to={authHref} onClick={() => setMenuOpen(false)} className="flex-1">
+                    <Button size="sm" className="w-full">
+                      {authLabel}
+                    </Button>
                   </Link>
-                ) : (
-                  <Link to="/login" onClick={() => setMobileNavOpen(false)}>
-                    <Button variant="primary" className="w-full">Login</Button>
-                  </Link>
-                )}
-              </div>
-            </div>
-          </SectionContainer>
-        ) : null}
+                </div>
+              </SectionContainer>
+            </PageTransition>
+          ) : null}
+        </AnimatePresence>
       </header>
 
-      <main className="route-stage">
-        <div key={location.pathname} className="route-transition">
-          <Outlet />
-        </div>
+      <main>
+        <AnimatePresence mode="wait">
+          <PageTransition key={location.pathname} className="min-h-[calc(100vh-4rem)]">
+            <Outlet />
+          </PageTransition>
+        </AnimatePresence>
       </main>
 
       <Footer />

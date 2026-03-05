@@ -10,8 +10,10 @@ import ContactPage from "./pages/marketing/ContactPage";
 import LandingPage from "./pages/marketing/LandingPage";
 import PricingPage from "./pages/marketing/PricingPage";
 import ProductPage from "./pages/marketing/ProductPage";
+import NotesPage from "./pages/NotesPage";
 import ProfilePage from "./pages/ProfilePage";
 import SessionPage from "./pages/SessionPage";
+import SessionsPage from "./pages/SessionsPage";
 import { supabase } from "./supabase";
 
 export default function App() {
@@ -47,10 +49,8 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-100 dark:bg-slate-950">
-        <div className="rounded-2xl border border-slate-200 bg-white px-6 py-4 text-sm font-medium text-slate-600 shadow-soft dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
-          Loading workspace...
-        </div>
+      <div className="flex min-h-screen items-center justify-center px-4">
+        <div className="panel p-6 text-sm font-medium">Loading workspace...</div>
       </div>
     );
   }
@@ -69,6 +69,8 @@ export default function App() {
       <Route element={<ProtectedRoute session={session} />}>
         <Route element={<AppLayout session={session} onSignOut={handleSignOut} />}>
           <Route path="/dashboard" element={<DashboardPage session={session} />} />
+          <Route path="/notes" element={<NotesPage session={session} />} />
+          <Route path="/sessions" element={<SessionsPage session={session} />} />
           <Route path="/sessions/:sessionId" element={<SessionPage session={session} />} />
           <Route path="/profile" element={<ProfilePage session={session} onSignOut={handleSignOut} />} />
         </Route>

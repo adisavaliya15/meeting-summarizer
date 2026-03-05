@@ -1,0 +1,20 @@
+<svg width="740" height="520" viewBox="0 0 740 520" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="blobA" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(160 180) rotate(21) scale(280 220)">
+      <stop offset="0" stop-color="#818CF8" stop-opacity="0.58"/>
+      <stop offset="1" stop-color="#818CF8" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="blobB" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(560 150) rotate(11) scale(270 210)">
+      <stop offset="0" stop-color="#38BDF8" stop-opacity="0.42"/>
+      <stop offset="1" stop-color="#38BDF8" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="blobC" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(410 340) rotate(-12) scale(300 190)">
+      <stop offset="0" stop-color="#4F46E5" stop-opacity="0.36"/>
+      <stop offset="1" stop-color="#4F46E5" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="740" height="520" fill="transparent"/>
+  <ellipse cx="160" cy="180" rx="280" ry="220" fill="url(#blobA)"/>
+  <ellipse cx="560" cy="150" rx="270" ry="210" fill="url(#blobB)"/>
+  <ellipse cx="410" cy="340" rx="300" ry="190" fill="url(#blobC)"/>
+</svg>

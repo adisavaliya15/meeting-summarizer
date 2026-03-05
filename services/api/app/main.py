@@ -1,6 +1,7 @@
 import uuid
 from typing import Any
 
+import requests
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from psycopg.errors import UniqueViolation
@@ -9,7 +10,14 @@ from psycopg.types.json import Json
 from .auth import CurrentUser, get_current_user
 from .config import settings, validate_settings
 from .db import get_db_conn
-from .models import ChunkInitRequest, ChunkUploadedRequest, SessionCreateRequest
+from .models import (
+    ChunkInitRequest,
+    ChunkUploadedRequest,
+    NoteCreateRequest,
+    NoteUpdateRequest,
+    SessionCreateRequest,
+)
+from .notes_summary import render_manual_note_summary_markdown, summarize_manual_note
 from .supabase_storage import create_signed_upload_url, delete_storage_object
 
 validate_settings()
@@ -28,6 +36,190 @@ app.add_middleware(
 @app.get("/api/health")
 def health(current_user: CurrentUser = Depends(get_current_user)) -> dict[str, Any]:
     return {"ok": True, "service": "meeting-summarizer-api", "user_id": current_user.id}
+
+
+def _normalize_note_title(title: str) -> str:
+    cleaned = title.strip()
+    if not cleaned:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Note title cannot be empty")
+    return cleaned
+
+
+@app.get("/api/notes")
+def list_notes(current_user: CurrentUser = Depends(get_current_user)) -> dict[str, Any]:
+    with get_db_conn() as conn:
+        notes = conn.execute(
+            """
+            select
+              id,
+              owner_id,
+              title,
+              content,
+              summary,
+              summary_md,
+              summarized_at,
+              created_at,
+              updated_at
+            from manual_notes
+            where owner_id = %s
+            order by updated_at desc
+            """,
+            (current_user.id,),
+        ).fetchall()
+    return {"notes": notes}
+
+
+@app.post("/api/notes")
+def create_note(
+    body: NoteCreateRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+) -> dict[str, Any]:
+    with get_db_conn() as conn:
+        note = conn.execute(
+            """
+            insert into manual_notes (owner_id, title, content)
+            values (%s, %s, '')
+            returning *
+            """,
+            (current_user.id, _normalize_note_title(body.title)),
+        ).fetchone()
+        conn.commit()
+    return {"note": note}
+
+
+@app.get("/api/notes/{note_id}")
+def get_note(
+    note_id: uuid.UUID,
+    current_user: CurrentUser = Depends(get_current_user),
+) -> dict[str, Any]:
+    with get_db_conn() as conn:
+        note = conn.execute(
+            """
+            select *
+            from manual_notes
+            where id = %s and owner_id = %s
+            """,
+            (note_id, current_user.id),
+        ).fetchone()
+        if not note:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Note not found")
+    return {"note": note}
+
+
+@app.put("/api/notes/{note_id}")
+def update_note(
+    note_id: uuid.UUID,
+    body: NoteUpdateRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+) -> dict[str, Any]:
+    with get_db_conn() as conn:
+        note = conn.execute(
+            """
+            update manual_notes
+            set title = %s,
+                content = %s,
+                summary = case
+                  when manual_notes.content is distinct from %s then null
+                  else manual_notes.summary
+                end,
+                summary_md = case
+                  when manual_notes.content is distinct from %s then null
+                  else manual_notes.summary_md
+                end,
+                summarized_at = case
+                  when manual_notes.content is distinct from %s then null
+                  else manual_notes.summarized_at
+                end,
+                updated_at = now()
+            where id = %s
+              and owner_id = %s
+            returning *
+            """,
+            (
+                _normalize_note_title(body.title),
+                body.content,
+                body.content,
+                body.content,
+                body.content,
+                note_id,
+                current_user.id,
+            ),
+        ).fetchone()
+        if not note:
+            conn.rollback()
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Note not found")
+        conn.commit()
+    return {"note": note}
+
+
+@app.delete("/api/notes/{note_id}")
+def delete_note(
+    note_id: uuid.UUID,
+    current_user: CurrentUser = Depends(get_current_user),
+) -> dict[str, Any]:
+    with get_db_conn() as conn:
+        note = conn.execute(
+            """
+            delete from manual_notes
+            where id = %s
+              and owner_id = %s
+            returning id
+            """,
+            (note_id, current_user.id),
+        ).fetchone()
+        if not note:
+            conn.rollback()
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Note not found")
+        conn.commit()
+    return {"deleted": True, "note_id": str(note_id)}
+
+
+@app.post("/api/notes/{note_id}/summarize")
+def summarize_note(
+    note_id: uuid.UUID,
+    current_user: CurrentUser = Depends(get_current_user),
+) -> dict[str, Any]:
+    with get_db_conn() as conn:
+        note = conn.execute(
+            """
+            select *
+            from manual_notes
+            where id = %s
+              and owner_id = %s
+            """,
+            (note_id, current_user.id),
+        ).fetchone()
+        if not note:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Note not found")
+
+        content = str(note.get("content") or "")
+        if not content.strip():
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Note is empty")
+
+        try:
+            summary = summarize_manual_note(content)
+        except requests.RequestException as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Failed to summarize note. Verify OLLAMA_URL and OLLAMA_MODEL.",
+            ) from exc
+
+        summary_md = render_manual_note_summary_markdown(summary)
+        updated = conn.execute(
+            """
+            update manual_notes
+            set summary = %s,
+                summary_md = %s,
+                summarized_at = now()
+            where id = %s
+              and owner_id = %s
+            returning *
+            """,
+            (Json(summary), summary_md, note_id, current_user.id),
+        ).fetchone()
+        conn.commit()
+
+    return {"note": updated}
 
 
 @app.post("/api/sessions")

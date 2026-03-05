@@ -1,6 +1,11 @@
+import { Mail, Moon, ShieldCheck, Sun, UserPlus } from "lucide-react";
 import { useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 
+import Badge from "../components/ui/Badge";
+import Button from "../components/ui/Button";
+import Card from "../components/ui/Card";
+import Input from "../components/ui/Input";
 import { useTheme } from "../components/ui/ThemeProvider";
 import { useToast } from "../components/ui/ToastProvider";
 import { supabase } from "../supabase";
@@ -13,6 +18,7 @@ function isAlreadyRegisteredError(errorText) {
 export default function LoginPage({ session }) {
   const { theme, toggleTheme } = useTheme();
   const { pushToast } = useToast();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -28,6 +34,7 @@ export default function LoginPage({ session }) {
     setError("");
     setMessage("");
     setLoading(true);
+
     try {
       const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
       if (signInError) {
@@ -35,8 +42,9 @@ export default function LoginPage({ session }) {
       }
       pushToast("Signed in", "success");
     } catch (err) {
-      setError(err.message || "Sign in failed");
-      pushToast(err.message || "Sign in failed", "error");
+      const text = err.message || "Sign in failed";
+      setError(text);
+      pushToast(text, "error");
     } finally {
       setLoading(false);
     }
@@ -46,23 +54,24 @@ export default function LoginPage({ session }) {
     setError("");
     setMessage("");
     setLoading(true);
+
     try {
       const { data, error: signUpError } = await supabase.auth.signUp({ email, password });
       if (signUpError) {
         if (isAlreadyRegisteredError(signUpError.message)) {
-          const duplicateMessage = "This email is already registered. Please sign in.";
-          setError(duplicateMessage);
-          pushToast(duplicateMessage, "error");
+          const duplicate = "This email is already registered. Please sign in.";
+          setError(duplicate);
+          pushToast(duplicate, "error");
           return;
         }
         throw signUpError;
       }
 
-      const existingAccountMaskedResponse = data?.user && Array.isArray(data.user.identities) && data.user.identities.length === 0;
-      if (existingAccountMaskedResponse) {
-        const duplicateMessage = "This email is already registered. Please sign in.";
-        setError(duplicateMessage);
-        pushToast(duplicateMessage, "error");
+      const maskedExisting = data?.user && Array.isArray(data.user.identities) && data.user.identities.length === 0;
+      if (maskedExisting) {
+        const duplicate = "This email is already registered. Please sign in.";
+        setError(duplicate);
+        pushToast(duplicate, "error");
         return;
       }
 
@@ -70,73 +79,94 @@ export default function LoginPage({ session }) {
       setMessage(text);
       pushToast("Account created", "success");
     } catch (err) {
-      setError(err.message || "Sign up failed");
-      pushToast(err.message || "Sign up failed", "error");
+      const text = err.message || "Sign up failed";
+      setError(text);
+      pushToast(text, "error");
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-100 via-brand-50 to-white px-4 py-10 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
-      <div className="mx-auto flex w-full max-w-5xl items-start justify-between">
-        <Link to="/" className="text-sm font-semibold text-brand-600 hover:text-brand-500 dark:text-brand-300 dark:hover:text-brand-200">
-          Back to home
-        </Link>
-        <button
-          type="button"
-          onClick={toggleTheme}
-          className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-        >
-          {theme === "dark" ? "Light" : "Dark"}
-        </button>
-      </div>
+    <div className="min-h-screen px-4 py-10 sm:px-6">
+      <div className="section-container">
+        <div className="mb-6 flex items-center justify-between">
+          <Link to="/" className="inline-flex items-center gap-2 text-sm font-semibold text-muted transition hover:text-foreground">
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-primary-foreground text-xs">so</span>
+            Summora
+          </Link>
+          <Button variant="secondary" size="sm" onClick={toggleTheme}>
+            {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            {theme === "dark" ? "Light" : "Dark"}
+          </Button>
+        </div>
 
-      <div className="mx-auto mt-8 flex max-w-5xl justify-center">
-        <form
-          className="w-full max-w-md space-y-5 rounded-3xl border border-slate-200 bg-white p-8 shadow-soft dark:border-slate-700 dark:bg-slate-900"
-          onSubmit={signIn}
-        >
-          <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-brand-600 dark:text-brand-200">Summora</p>
-            <h1 className="mt-2 text-2xl font-bold text-slate-900 dark:text-white">Welcome back</h1>
-            <p className="mt-2 text-sm text-slate-500 dark:text-slate-300">Sign in to continue recording and summarizing meetings.</p>
-          </div>
+        <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+          <Card className="aurora-block p-8">
+            <div className="relative z-10 space-y-6">
+              <Badge tone="brand">Workspace Access</Badge>
+              <h1 className="max-w-xl text-4xl">Sign in to continue capturing and summarizing your meetings.</h1>
+              <p className="max-w-xl text-base text-muted">
+                Summora keeps long conversations structured with chunk-based transcription and readable AI summaries.
+              </p>
 
-          <label className="field-label">
-            Email
-            <input
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              required
-              autoComplete="email"
-              className="input-base"
-            />
-          </label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Card variant="glass" className="p-4">
+                  <Mail className="h-5 w-5 text-primary" />
+                  <p className="mt-3 text-sm text-muted">Use your email/password Supabase login to access your workspace.</p>
+                </Card>
+                <Card variant="glass" className="p-4">
+                  <ShieldCheck className="h-5 w-5 text-primary" />
+                  <p className="mt-3 text-sm text-muted">Data stays scoped per authenticated user and secure session token.</p>
+                </Card>
+              </div>
+            </div>
+          </Card>
 
-          <label className="field-label">
-            Password
-            <input
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              required
-              autoComplete="current-password"
-              className="input-base"
-            />
-          </label>
+          <Card className="p-7">
+            <form className="space-y-4" onSubmit={signIn}>
+              <div>
+                <h2 className="text-2xl">Welcome back</h2>
+                <p className="mt-2 text-sm text-muted">Use your registered account to continue.</p>
+              </div>
 
-          {error ? <div className="alert-error">{error}</div> : null}
-          {message ? <div className="alert-success">{message}</div> : null}
+              <label className="field-label">
+                Email
+                <Input
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  autoComplete="email"
+                  required
+                />
+              </label>
 
-          <button type="submit" disabled={loading} className="btn-primary w-full">
-            {loading ? "Working..." : "Sign In"}
-          </button>
-          <button type="button" className="btn-secondary w-full" onClick={signUp} disabled={loading}>
-            Create Account
-          </button>
-        </form>
+              <label className="field-label">
+                Password
+                <Input
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  autoComplete="current-password"
+                  required
+                />
+              </label>
+
+              {error ? <div className="alert-error">{error}</div> : null}
+              {message ? <div className="alert-success">{message}</div> : null}
+
+              <div className="grid gap-2">
+                <Button type="submit" disabled={loading} className="w-full">
+                  {loading ? "Working..." : "Sign In"}
+                </Button>
+                <Button type="button" variant="secondary" disabled={loading} className="w-full" onClick={signUp}>
+                  <UserPlus className="h-4 w-4" />
+                  Create account
+                </Button>
+              </div>
+            </form>
+          </Card>
+        </div>
       </div>
     </div>
   );

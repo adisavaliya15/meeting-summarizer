@@ -16,6 +16,8 @@ class Settings:
     supabase_url: str
     supabase_service_role_key: str
     supabase_db_url: str
+    ollama_url: str
+    ollama_model: str
     cors_origins: list[str]
     api_host: str
     api_port: int
@@ -25,6 +27,8 @@ settings = Settings(
     supabase_url=os.getenv("SUPABASE_URL", "").rstrip("/"),
     supabase_service_role_key=os.getenv("SUPABASE_SERVICE_ROLE_KEY", ""),
     supabase_db_url=os.getenv("SUPABASE_DB_URL", ""),
+    ollama_url=os.getenv("OLLAMA_URL", "http://localhost:11434").rstrip("/"),
+    ollama_model=os.getenv("OLLAMA_MODEL", "llama3.1:8b"),
     cors_origins=_split_csv(os.getenv("CORS_ORIGINS", "http://localhost:5173")),
     api_host=os.getenv("API_HOST", "0.0.0.0"),
     api_port=int(os.getenv("API_PORT", "8000")),

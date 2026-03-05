@@ -26,7 +26,7 @@ settings = Settings(
     supabase_service_role_key=os.getenv("SUPABASE_SERVICE_ROLE_KEY", ""),
     supabase_db_url=os.getenv("SUPABASE_DB_URL", ""),
     ollama_url=os.getenv("OLLAMA_URL", "http://localhost:11434").rstrip("/"),
-    whisper_model=os.getenv("WHISPER_MODEL", "small"),
+    whisper_model=os.getenv("WHISPER_MODEL", "large-v3"),
     ollama_model=os.getenv("OLLAMA_MODEL", "llama3.1:8b"),
     poll_interval_sec=int(os.getenv("POLL_INTERVAL_SEC", "5")),
     max_attempts=int(os.getenv("MAX_ATTEMPTS", "3")),
@@ -44,3 +44,4 @@ def validate_settings() -> None:
         missing.append("SUPABASE_DB_URL")
     if missing:
         raise RuntimeError(f"Missing required environment variables: {', '.join(missing)}")
+

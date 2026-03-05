@@ -1,10 +1,22 @@
-const TONE = {
-  neutral: "badge badge-neutral",
-  brand: "badge badge-brand",
-  success: "badge badge-success",
-  warning: "badge badge-warning",
-};
+import { cva } from "class-variance-authority";
 
-export default function Badge({ tone = "neutral", className = "", children }) {
-  return <span className={`${TONE[tone] || TONE.neutral} ${className}`.trim()}>{children}</span>;
+import { cn } from "../../lib/cn";
+
+const badgeVariants = cva("badge", {
+  variants: {
+    tone: {
+      neutral: "badge-neutral",
+      brand: "badge-brand",
+      success: "badge-success",
+      warning: "badge-warning",
+      danger: "badge-danger",
+    },
+  },
+  defaultVariants: {
+    tone: "neutral",
+  },
+});
+
+export default function Badge({ className, tone, children }) {
+  return <span className={cn(badgeVariants({ tone }), className)}>{children}</span>;
 }

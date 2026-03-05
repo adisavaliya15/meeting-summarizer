@@ -1,6 +1,12 @@
-import { useMemo } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Copy, Download, Search } from "lucide-react";
+import { useMemo, useState } from "react";
 
+import Card from "../ui/Card";
 import EmptyState from "../ui/EmptyState";
+import Input from "../ui/Input";
+import Button from "../ui/Button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/Tabs";
 import { useToast } from "../ui/ToastProvider";
 
 const TABS = [
@@ -9,73 +15,34 @@ const TABS = [
   { id: "final", label: "Final Summary" },
 ];
 
-function SummarySection({ title, values }) {
-  if (!Array.isArray(values) || values.length === 0) {
-    return null;
-  }
-  return (
-    <section>
-      <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200">{title}</h4>
-      <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-600 dark:text-slate-300">
-        {values.map((value, index) => (
-          <li key={`${title}-${index}`}>{typeof value === "string" ? value : JSON.stringify(value)}</li>
-        ))}
-      </ul>
-    </section>
-  );
-}
+const sectionLabels = {
+  key_points: "Key Points",
+  action_items: "Action Items",
+  decisions: "Decisions",
+  open_questions: "Open Questions",
+  topics: "Topics",
+  key_takeaways: "Key Takeaways",
+  risks: "Risks",
+  topic_timeline: "Topic Timeline",
+};
 
-function SummaryCardList({ title, values }) {
+function listToMarkdown(title, values) {
   if (!Array.isArray(values) || values.length === 0) {
-    return null;
+    return "";
   }
 
-  return (
-    <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/40">
-      <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200">{title}</h4>
-      <ul className="mt-3 space-y-2 text-sm text-slate-600 dark:text-slate-300">
-        {values.map((value, index) => (
-          <li key={`${title}-${index}`} className="flex gap-2">
-            <span className="mt-1 h-1.5 w-1.5 rounded-full bg-brand-500" />
-            <span>{typeof value === "string" ? value : JSON.stringify(value)}</span>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-function TopicTimelineSection({ values }) {
-  if (!Array.isArray(values) || values.length === 0) {
-    return null;
-  }
-
-  return (
-    <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/40">
-      <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Topic Timeline</h4>
-      <ul className="mt-3 space-y-2 text-sm text-slate-600 dark:text-slate-300">
-        {values.map((value, index) => {
-          if (typeof value === "string") {
-            return (
-              <li key={`topic-${index}`} className="flex gap-2">
-                <span className="mt-1 h-1.5 w-1.5 rounded-full bg-brand-500" />
-                <span>{value}</span>
-              </li>
-            );
-          }
-
-          const topic = value?.topic || "Topic";
-          const chunkIndex = value?.chunk_index;
-          return (
-            <li key={`topic-${index}`} className="flex gap-2">
-              <span className="mt-1 h-1.5 w-1.5 rounded-full bg-brand-500" />
-              <span>{chunkIndex === undefined || chunkIndex === null ? topic : `Chunk ${chunkIndex}: ${topic}`}</span>
-            </li>
-          );
-        })}
-      </ul>
-    </section>
-  );
+  const lines = [`## ${title}`];
+  values.forEach((item) => {
+    if (typeof item === "string") {
+      lines.push(`- ${item}`);
+      return;
+    }
+    const topic = item?.topic || "Topic";
+    const chunkIndex = item?.chunk_index;
+    lines.push(`- ${chunkIndex === undefined || chunkIndex === null ? topic : `Chunk ${chunkIndex}: ${topic}`}`);
+  });
+  lines.push("");
+  return lines.join("\n");
 }
 
 function stripCodeFence(text) {
@@ -162,21 +129,8 @@ function chunkSummaryMarkdown(summary) {
   }
 
   const lines = ["# Chunk Summary", "", summary.summary || "", ""];
-  const listSections = [
-    ["Key Points", summary.key_points],
-    ["Action Items", summary.action_items],
-    ["Decisions", summary.decisions],
-    ["Open Questions", summary.open_questions],
-    ["Topics", summary.topics],
-  ];
-
-  listSections.forEach(([title, items]) => {
-    if (!Array.isArray(items) || items.length === 0) {
-      return;
-    }
-    lines.push(`## ${title}`);
-    items.forEach((item) => lines.push(`- ${item}`));
-    lines.push("");
+  ["key_points", "action_items", "decisions", "open_questions", "topics"].forEach((key) => {
+    lines.push(listToMarkdown(sectionLabels[key], summary[key]));
   });
 
   return lines.join("\n").trim();
@@ -192,21 +146,8 @@ function finalSummaryMarkdown(summary, fallbackMarkdown) {
   }
 
   const lines = ["# Final Summary", "", summary.overall_summary || "", ""];
-  const listSections = [
-    ["Key Takeaways", summary.key_takeaways],
-    ["Action Items", summary.action_items],
-    ["Decisions", summary.decisions],
-    ["Risks", summary.risks],
-    ["Open Questions", summary.open_questions],
-  ];
-
-  listSections.forEach(([title, items]) => {
-    if (!Array.isArray(items) || items.length === 0) {
-      return;
-    }
-    lines.push(`## ${title}`);
-    items.forEach((item) => lines.push(`- ${item}`));
-    lines.push("");
+  ["key_takeaways", "action_items", "decisions", "risks", "open_questions", "topic_timeline"].forEach((key) => {
+    lines.push(listToMarkdown(sectionLabels[key], summary[key]));
   });
 
   return lines.join("\n").trim();
@@ -224,8 +165,50 @@ function downloadMarkdown(fileName, markdown) {
   URL.revokeObjectURL(url);
 }
 
+function SectionList({ title, values }) {
+  if (!Array.isArray(values) || values.length === 0) {
+    return null;
+  }
+
+  return (
+    <Card variant="glass" className="p-4">
+      <h4 className="text-sm font-semibold text-foreground">{title}</h4>
+      <ul className="mt-3 space-y-2 text-sm text-muted">
+        {values.map((value, index) => {
+          const text = typeof value === "string"
+            ? value
+            : `${value?.chunk_index === undefined || value?.chunk_index === null ? "" : `Chunk ${value.chunk_index}: `}${value?.topic || JSON.stringify(value)}`;
+          return (
+            <li key={`${title}-${index}`} className="flex gap-2">
+              <span className="mt-1.5 inline-flex h-1.5 w-1.5 rounded-full bg-primary" />
+              <span>{text}</span>
+            </li>
+          );
+        })}
+      </ul>
+    </Card>
+  );
+}
+
+function MotionWrap({ children, value }) {
+  return (
+    <AnimatePresence mode="wait">
+      <motion.div
+        key={value}
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -6 }}
+        transition={{ duration: 0.2, ease: [0.2, 0.7, 0.2, 1] }}
+      >
+        {children}
+      </motion.div>
+    </AnimatePresence>
+  );
+}
+
 export default function SummaryPane({ activeTab, onTabChange, selectedChunk, sessionRow }) {
   const { pushToast } = useToast();
+  const [searchQuery, setSearchQuery] = useState("");
 
   const transcriptText = selectedChunk?.transcript?.text || "";
   const chunkSummary = selectedChunk?.chunk_summary || null;
@@ -235,9 +218,16 @@ export default function SummaryPane({ activeTab, onTabChange, selectedChunk, ses
   const transcriptSegments = useMemo(() => selectedChunk?.transcript?.segments || [], [selectedChunk]);
   const normalizedFinalSummary = useMemo(
     () => normalizeFinalSummary(finalSummary, finalSummaryMd),
-    [finalSummary, finalSummaryMd]
+    [finalSummary, finalSummaryMd],
   );
-  const activeTabIndex = Math.max(0, TABS.findIndex((tab) => tab.id === activeTab));
+
+  const filteredSegments = useMemo(() => {
+    if (!searchQuery.trim()) {
+      return transcriptSegments;
+    }
+    const query = searchQuery.trim().toLowerCase();
+    return transcriptSegments.filter((segment) => String(segment.text || "").toLowerCase().includes(query));
+  }, [searchQuery, transcriptSegments]);
 
   async function copyContent(text, label) {
     try {
@@ -250,34 +240,51 @@ export default function SummaryPane({ activeTab, onTabChange, selectedChunk, ses
 
   function renderTranscript() {
     if (!selectedChunk) {
-      return <EmptyState title="No chunk selected" description="Select a chunk from the left column to view transcript data." />;
+      return <EmptyState title="No chunk selected" description="Select a chunk on the left to inspect transcript data." />;
     }
 
     if (!transcriptText) {
-      return <EmptyState title="Transcript not ready" description="This chunk is still being transcribed." />;
+      return <EmptyState title="Transcript pending" description="This chunk is still being transcribed." />;
     }
 
     return (
       <div className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm text-slate-500 dark:text-slate-300">Chunk {selectedChunk.idx} transcript</p>
-          <button type="button" className="btn-secondary" onClick={() => copyContent(transcriptText, "Transcript")}>Copy</button>
+        <div className="summary-sticky flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm text-muted">Chunk {selectedChunk.idx} transcript</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative w-[220px]">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+              <Input
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search transcript"
+                className="h-9 pl-9"
+              />
+            </div>
+            <Button variant="secondary" size="sm" onClick={() => copyContent(transcriptText, "Transcript")}>
+              <Copy className="h-4 w-4" />
+              Copy
+            </Button>
+          </div>
         </div>
-        <div className="readable-block">
-          {transcriptText}
-        </div>
-        {transcriptSegments.length > 0 ? (
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
-            <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Timestamped Segments</h4>
-            <div className="mt-3 max-h-64 space-y-2 overflow-y-auto text-sm">
-              {transcriptSegments.map((segment, index) => (
-                <p key={`segment-${index}`} className="transcript-segment">
-                  [{segment.start}s - {segment.end}s] {segment.text}
-                </p>
+
+        <div className="transcript-reading">{transcriptText}</div>
+
+        <Card variant="glass" className="space-y-3 p-4">
+          <h4 className="text-sm font-semibold text-foreground">Timestamped segments</h4>
+          {filteredSegments.length === 0 ? (
+            <p className="text-sm text-muted">No segments match your search.</p>
+          ) : (
+            <div className="max-h-[340px] space-y-2 overflow-auto">
+              {filteredSegments.map((segment, index) => (
+                <div key={`segment-${index}`} className="transcript-segment text-sm text-muted">
+                  <p className="font-medium text-foreground">[{segment.start}s - {segment.end}s]</p>
+                  <p className="mt-1">{segment.text}</p>
+                </div>
               ))}
             </div>
-          </div>
-        ) : null}
+          )}
+        </Card>
       </div>
     );
   }
@@ -288,102 +295,124 @@ export default function SummaryPane({ activeTab, onTabChange, selectedChunk, ses
     }
 
     if (!chunkSummary) {
-      return <EmptyState title="Summary not ready" description="Chunk summary will appear after processing completes." />;
+      return <EmptyState title="Summary pending" description="Chunk summary appears after processing completes." />;
     }
 
     const markdown = chunkSummaryMarkdown(chunkSummary);
 
     return (
-      <div className="space-y-5">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm text-slate-500 dark:text-slate-300">Chunk {selectedChunk.idx} summary</p>
-          <div className="flex gap-2">
-            <button type="button" className="btn-secondary" onClick={() => copyContent(JSON.stringify(chunkSummary, null, 2), "Chunk summary JSON")}>
+      <div className="space-y-4">
+        <div className="summary-sticky flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm text-muted">Chunk {selectedChunk.idx} summary</p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => copyContent(JSON.stringify(chunkSummary, null, 2), "Chunk summary JSON")}
+            >
+              <Copy className="h-4 w-4" />
               Copy
-            </button>
-            <button type="button" className="btn-secondary" onClick={() => downloadMarkdown(`chunk-${selectedChunk.idx}-summary.md`, markdown)}>
-              Export Markdown
-            </button>
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => downloadMarkdown(`chunk-${selectedChunk.idx}-summary.md`, markdown)}
+            >
+              <Download className="h-4 w-4" />
+              Export
+            </Button>
           </div>
         </div>
 
-        <div className="grid gap-5 rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-900">
-          <section>
-            <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Summary</h4>
-            <p className="mt-2 text-sm leading-7 text-slate-600 dark:text-slate-200">{chunkSummary.summary || "-"}</p>
-          </section>
-          <SummarySection title="Key Points" values={chunkSummary.key_points} />
-          <SummarySection title="Action Items" values={chunkSummary.action_items} />
-          <SummarySection title="Decisions" values={chunkSummary.decisions} />
-          <SummarySection title="Open Questions" values={chunkSummary.open_questions} />
-          <SummarySection title="Topics" values={chunkSummary.topics} />
-        </div>
+        <Card className="space-y-5 p-5">
+          <Card variant="glass" className="p-4">
+            <h4 className="text-sm font-semibold text-foreground">Summary</h4>
+            <p className="mt-2 text-sm leading-7 text-muted">{chunkSummary.summary || "-"}</p>
+          </Card>
+
+          <div className="grid gap-3 lg:grid-cols-2">
+            <SectionList title="Key Points" values={chunkSummary.key_points} />
+            <SectionList title="Action Items" values={chunkSummary.action_items} />
+            <SectionList title="Decisions" values={chunkSummary.decisions} />
+            <SectionList title="Open Questions" values={chunkSummary.open_questions} />
+            <SectionList title="Topics" values={chunkSummary.topics} />
+          </div>
+        </Card>
       </div>
     );
   }
 
   function renderFinalSummary() {
     if (!finalSummary && !finalSummaryMd) {
-      return <EmptyState title="Final summary not ready" description="Finalize the session to generate a combined summary." />;
+      return <EmptyState title="Final summary not ready" description="Finalize the session to generate the combined summary." />;
     }
 
     const markdown = finalSummaryMarkdown(normalizedFinalSummary || finalSummary, finalSummaryMd);
 
     return (
-      <div className="space-y-5">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm text-slate-500 dark:text-slate-300">Session-level summary</p>
-          <div className="flex gap-2">
-            <button type="button" className="btn-secondary" onClick={() => copyContent(markdown, "Final summary")}>Copy</button>
-            <button type="button" className="btn-secondary" onClick={() => downloadMarkdown("final-summary.md", markdown)}>
-              Export Markdown
-            </button>
+      <div className="space-y-4">
+        <div className="summary-sticky flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm text-muted">Session-level summary</p>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" size="sm" onClick={() => copyContent(markdown, "Final summary")}>
+              <Copy className="h-4 w-4" />
+              Copy
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => downloadMarkdown("final-summary.md", markdown)}>
+              <Download className="h-4 w-4" />
+              Export
+            </Button>
           </div>
         </div>
 
         {normalizedFinalSummary ? (
-          <div className="grid gap-5 rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-900">
-            <section className="rounded-2xl border border-brand-200 bg-brand-50 p-4 dark:border-brand-500/30 dark:bg-brand-900/20">
-              <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Overall Summary</h4>
-              <p className="mt-2 text-sm leading-7 text-slate-700 dark:text-slate-100">{normalizedFinalSummary.overall_summary || "-"}</p>
-            </section>
+          <Card className="space-y-5 p-5">
+            <Card variant="glass" className="p-4">
+              <h4 className="text-sm font-semibold text-foreground">Overall Summary</h4>
+              <p className="mt-2 text-sm leading-7 text-muted">{normalizedFinalSummary.overall_summary || "-"}</p>
+            </Card>
 
-            <div className="grid gap-4 lg:grid-cols-2">
-              <SummaryCardList title="Key Takeaways" values={normalizedFinalSummary.key_takeaways} />
-              <SummaryCardList title="Action Items" values={normalizedFinalSummary.action_items} />
-              <SummaryCardList title="Decisions" values={normalizedFinalSummary.decisions} />
-              <SummaryCardList title="Risks" values={normalizedFinalSummary.risks} />
-              <SummaryCardList title="Open Questions" values={normalizedFinalSummary.open_questions} />
-              <TopicTimelineSection values={normalizedFinalSummary.topic_timeline} />
+            <div className="grid gap-3 lg:grid-cols-2">
+              <SectionList title="Key Takeaways" values={normalizedFinalSummary.key_takeaways} />
+              <SectionList title="Action Items" values={normalizedFinalSummary.action_items} />
+              <SectionList title="Decisions" values={normalizedFinalSummary.decisions} />
+              <SectionList title="Risks" values={normalizedFinalSummary.risks} />
+              <SectionList title="Open Questions" values={normalizedFinalSummary.open_questions} />
+              <SectionList title="Topic Timeline" values={normalizedFinalSummary.topic_timeline} />
             </div>
-          </div>
+          </Card>
         ) : (
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-900">
-            <pre className="whitespace-pre-wrap break-words text-sm leading-7 text-slate-700 dark:text-slate-100">{markdown}</pre>
-          </div>
+          <Card className="p-5">
+            <pre className="whitespace-pre-wrap break-words text-sm leading-7 text-muted">{markdown}</pre>
+          </Card>
         )}
       </div>
     );
   }
 
   return (
-    <section className="panel space-y-4">
-      <div className="tabs-rail" style={{ "--tab-count": TABS.length, "--tab-index": activeTabIndex }}>
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => onTabChange(tab.id)}
-            className={`tab-pill ${activeTab === tab.id ? "is-active" : ""}`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+    <Card variant="panel" className="space-y-4 p-6">
+      <Tabs value={activeTab} onValueChange={onTabChange}>
+        <TabsList>
+          {TABS.map((tab) => (
+            <TabsTrigger key={tab.id} value={tab.id}>
+              {tab.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
 
-      {activeTab === "transcript" ? renderTranscript() : null}
-      {activeTab === "chunk" ? renderChunkSummary() : null}
-      {activeTab === "final" ? renderFinalSummary() : null}
-    </section>
+        <TabsContent value="transcript">
+          <MotionWrap value="transcript">{renderTranscript()}</MotionWrap>
+        </TabsContent>
+
+        <TabsContent value="chunk">
+          <MotionWrap value="chunk">{renderChunkSummary()}</MotionWrap>
+        </TabsContent>
+
+        <TabsContent value="final">
+          <MotionWrap value="final">{renderFinalSummary()}</MotionWrap>
+        </TabsContent>
+      </Tabs>
+    </Card>
   );
 }

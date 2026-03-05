@@ -1,133 +1,224 @@
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  FileText,
+  LayoutDashboard,
+  ListChecks,
+  Menu,
+  Moon,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Sun,
+  UserCircle,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 
+import PageTransition from "../motion/PageTransition";
+import Button from "../ui/Button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "../ui/DropdownMenu";
 import { useTheme } from "../ui/ThemeProvider";
 
-function navClass(active) {
-  return `rounded-xl px-3 py-2 text-sm font-medium transition ${
-    active
-      ? "bg-brand-600 text-white shadow-soft"
-      : "text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
-  }`;
+function routeMeta(pathname) {
+  if (pathname.startsWith("/sessions/")) {
+    return {
+      title: "Session Detail",
+      breadcrumb: ["Workspace", "Sessions", "Detail"],
+    };
+  }
+  if (pathname === "/sessions") {
+    return {
+      title: "Sessions",
+      breadcrumb: ["Workspace", "Sessions"],
+    };
+  }
+  if (pathname === "/notes") {
+    return {
+      title: "Manual Notes",
+      breadcrumb: ["Workspace", "Notes"],
+    };
+  }
+  if (pathname === "/profile") {
+    return {
+      title: "Profile",
+      breadcrumb: ["Workspace", "Profile"],
+    };
+  }
+  return {
+    title: "Dashboard",
+    breadcrumb: ["Workspace", "Dashboard"],
+  };
 }
 
 export default function AppLayout({ session, onSignOut }) {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const location = useLocation();
   const { theme, toggleTheme } = useTheme();
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
-    setSidebarOpen(false);
-    setUserMenuOpen(false);
+    setMobileOpen(false);
   }, [location.pathname]);
 
-  const sidebarLinks = useMemo(
+  const navItems = useMemo(
     () => [
-      { to: "/dashboard", label: "Dashboard", match: (path) => path === "/dashboard" },
-      { to: "/dashboard#sessions", label: "Sessions", match: (path) => path === "/dashboard" },
-      { to: "/profile", label: "Profile", match: (path) => path === "/profile" },
+      { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { to: "/notes", label: "Notes", icon: FileText },
+      { to: "/sessions", label: "Sessions", icon: ListChecks },
+      { to: "/profile", label: "Profile", icon: UserCircle },
     ],
     [],
   );
 
+  const meta = routeMeta(location.pathname);
+
   return (
-    <div className="min-h-screen text-slate-900 dark:text-slate-100">
+    <div className="min-h-screen text-foreground">
       <div className="flex min-h-screen">
-        <aside
-          className={`fixed inset-y-0 left-0 z-40 w-64 transform border-r border-slate-200 bg-white/74 p-5 backdrop-blur-xl transition dark:border-slate-800 dark:bg-slate-950/72 md:static md:translate-x-0 ${
-            sidebarOpen ? "translate-x-0" : "-translate-x-full"
-          }`}
+        <motion.aside
+          animate={{ width: collapsed ? 92 : 248 }}
+          transition={{ duration: 0.22, ease: [0.2, 0.7, 0.2, 1] }}
+          className={`fixed inset-y-0 left-0 z-40 border-r border-default bg-panel backdrop-blur-xl ${mobileOpen ? "translate-x-0" : "-translate-x-full"} transition-transform md:translate-x-0`}
         >
-          <Link to="/dashboard" className="flex items-center gap-2 rounded-xl px-2 py-2 text-xl font-bold text-brand-600 dark:text-brand-200">
-            <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 text-sm text-white">SO</span>
-            Summora
-          </Link>
+          <div className="flex h-full flex-col px-4 py-5">
+            <Link to="/dashboard" className="inline-flex items-center gap-2 px-2">
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground text-sm font-bold">
+                so
+              </span>
+              <AnimatePresence>
+                {!collapsed ? (
+                  <motion.span
+                    initial={{ opacity: 0, x: -8 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -6 }}
+                    className="text-xl font-bold"
+                  >
+                    Summora
+                  </motion.span>
+                ) : null}
+              </AnimatePresence>
+            </Link>
 
-          <nav className="mt-8 grid gap-2">
-            {sidebarLinks.map((item) => (
-              <Link key={`${item.to}-${item.label}`} to={item.to} className={navClass(item.match(location.pathname))}>
-                {item.label}
-              </Link>
-            ))}
-          </nav>
-        </aside>
+            <nav className="mt-8 grid gap-2">
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    className={({ isActive }) =>
+                      `group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
+                        isActive
+                          ? "bg-primary text-primary-foreground shadow-soft"
+                          : "text-muted hover:bg-panel-2 hover:text-foreground"
+                      }`
+                    }
+                  >
+                    <Icon className="h-4.5 w-4.5" />
+                    <AnimatePresence>
+                      {!collapsed ? (
+                        <motion.span
+                          initial={{ opacity: 0, x: -6 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: -6 }}
+                        >
+                          {item.label}
+                        </motion.span>
+                      ) : null}
+                    </AnimatePresence>
+                  </NavLink>
+                );
+              })}
+            </nav>
 
-        {sidebarOpen ? (
+            <div className="mt-auto">
+              <Button
+                variant="secondary"
+                size="sm"
+                className="w-full justify-center"
+                onClick={() => setCollapsed((prev) => !prev)}
+              >
+                {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+                {!collapsed ? "Collapse" : null}
+              </Button>
+            </div>
+          </div>
+        </motion.aside>
+
+        {mobileOpen ? (
           <button
             type="button"
-            className="fixed inset-0 z-30 bg-slate-900/30 backdrop-blur-sm md:hidden"
-            onClick={() => setSidebarOpen(false)}
+            className="fixed inset-0 z-30 bg-slate-900/40 backdrop-blur-sm md:hidden"
+            onClick={() => setMobileOpen(false)}
             aria-label="Close sidebar"
           />
         ) : null}
 
-        <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/70 px-4 py-3 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/70 md:px-6">
+        <div className={`flex min-w-0 flex-1 flex-col ${collapsed ? "md:pl-[92px]" : "md:pl-[248px]"}`}>
+          <header className="sticky top-0 z-20 border-b border-default bg-panel px-4 py-3 backdrop-blur-xl md:px-6">
             <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  className="btn-secondary px-3 md:hidden"
-                  onClick={() => setSidebarOpen(true)}
-                >
-                  Menu
-                </button>
-                <div>
-                  <p className="text-xs uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Workspace</p>
-                  <h1 className="text-sm font-semibold text-slate-900 dark:text-white">Summora</h1>
+              <div className="flex min-w-0 items-center gap-3">
+                <Button variant="secondary" size="icon" className="md:hidden" onClick={() => setMobileOpen(true)}>
+                  <Menu className="h-4 w-4" />
+                </Button>
+                <div className="min-w-0">
+                  <p className="truncate text-xs uppercase tracking-[0.2em] text-muted">{meta.breadcrumb.join(" | ")}</p>
+                  <h2 className="truncate text-lg font-semibold">{meta.title}</h2>
                 </div>
               </div>
 
               <div className="flex items-center gap-2">
-                <Link to="/" className="btn-secondary px-3">
-                  Home
+                <Link to="/">
+                  <Button variant="secondary" size="sm">Home</Button>
                 </Link>
-
-                <button
-                  type="button"
-                  onClick={toggleTheme}
-                  className="btn-secondary px-3"
-                >
+                <Button variant="secondary" size="sm" onClick={toggleTheme}>
+                  {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
                   {theme === "dark" ? "Light" : "Dark"}
-                </button>
+                </Button>
 
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setUserMenuOpen((open) => !open)}
-                    className="btn-secondary px-3"
-                  >
-                    {session?.user?.email?.split("@")[0] || "User"}
-                  </button>
-
-                  {userMenuOpen ? (
-                    <div className="absolute right-0 mt-2 w-56 rounded-xl border border-slate-200 bg-white/95 p-2 shadow-elevated backdrop-blur-xl dark:border-slate-700 dark:bg-slate-900/95">
-                      <p className="rounded-lg px-3 py-2 text-xs text-slate-500 dark:text-slate-300">{session?.user?.email}</p>
-                      <NavLink
-                        to="/profile"
-                        className="mt-1 block rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
-                      >
-                        Profile
-                      </NavLink>
-                      <button
-                        type="button"
-                        onClick={onSignOut}
-                        className="mt-1 w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-rose-600 transition hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-900/30"
-                      >
-                        Logout
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="secondary" size="sm" className="max-w-[180px] truncate">
+                      {session?.user?.email?.split("@")[0] || "User"}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem asChild>
+                      <Link to="/profile">Profile</Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link to="/dashboard">Dashboard</Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link to="/notes">Notes</Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onSelect={(event) => {
+                        event.preventDefault();
+                        onSignOut();
+                      }}
+                      className="text-danger"
+                    >
+                      Logout
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
           </header>
 
-          <main className="route-stage flex-1 px-4 py-5 md:px-6 md:py-6">
-            <div key={location.pathname} className="route-transition">
-              <Outlet />
-            </div>
+          <main className="flex-1 px-4 py-5 md:px-6 md:py-6">
+            <AnimatePresence mode="wait">
+              <PageTransition key={location.pathname}>
+                <Outlet />
+              </PageTransition>
+            </AnimatePresence>
           </main>
         </div>
       </div>

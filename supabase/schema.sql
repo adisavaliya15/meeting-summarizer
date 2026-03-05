@@ -46,6 +46,39 @@ create table if not exists sessions (
   final_summary_md text
 );
 
+create table if not exists manual_notes (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null references auth.users(id) on delete cascade,
+  title text not null default 'Untitled note',
+  content text not null default '',
+  summary jsonb,
+  summary_md text,
+  summarized_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- Migration safety for existing projects that previously had one note per owner.
+alter table manual_notes add column if not exists title text;
+update manual_notes
+set title = 'Untitled note'
+where title is null or btrim(title) = '';
+alter table manual_notes alter column title set default 'Untitled note';
+alter table manual_notes alter column title set not null;
+
+do $$
+begin
+  if exists (
+    select 1
+    from pg_constraint
+    where conname = 'manual_notes_owner_id_key'
+      and conrelid = 'manual_notes'::regclass
+  ) then
+    alter table manual_notes drop constraint manual_notes_owner_id_key;
+  end if;
+end
+$$;
+
 create table if not exists chunks (
   id uuid primary key default gen_random_uuid(),
   session_id uuid not null references sessions(id) on delete cascade,
@@ -77,6 +110,7 @@ create table if not exists jobs (
 );
 
 create index if not exists sessions_owner_created_idx on sessions(owner_id, created_at desc);
+create index if not exists manual_notes_owner_updated_idx on manual_notes(owner_id, updated_at desc);
 create index if not exists chunks_session_idx_idx on chunks(session_id, idx);
 create index if not exists chunks_owner_status_idx on chunks(owner_id, status);
 create index if not exists chunks_status_created_idx on chunks(status, created_at);
@@ -95,10 +129,12 @@ create unique index if not exists jobs_active_finalize_unique
     and status in ('PENDING', 'RUNNING');
 
 alter table sessions enable row level security;
+alter table manual_notes enable row level security;
 alter table chunks enable row level security;
 alter table jobs enable row level security;
 
 alter table sessions force row level security;
+alter table manual_notes force row level security;
 alter table chunks force row level security;
 alter table jobs force row level security;
 
@@ -122,6 +158,28 @@ create policy sessions_update_own
 drop policy if exists sessions_delete_own on sessions;
 create policy sessions_delete_own
   on sessions for delete
+  using (auth.uid() = owner_id);
+
+-- manual_notes: users can only manage their own note row.
+drop policy if exists manual_notes_select_own on manual_notes;
+create policy manual_notes_select_own
+  on manual_notes for select
+  using (auth.uid() = owner_id);
+
+drop policy if exists manual_notes_insert_own on manual_notes;
+create policy manual_notes_insert_own
+  on manual_notes for insert
+  with check (auth.uid() = owner_id);
+
+drop policy if exists manual_notes_update_own on manual_notes;
+create policy manual_notes_update_own
+  on manual_notes for update
+  using (auth.uid() = owner_id)
+  with check (auth.uid() = owner_id);
+
+drop policy if exists manual_notes_delete_own on manual_notes;
+create policy manual_notes_delete_own
+  on manual_notes for delete
   using (auth.uid() = owner_id);
 
 -- chunks: users can only manage chunks for their own sessions.
@@ -154,7 +212,7 @@ create policy jobs_select_own
 
 revoke insert, update, delete on jobs from authenticated, anon;
 grant select on jobs to authenticated;
-grant select, insert, update, delete on sessions, chunks to authenticated;
+grant select, insert, update, delete on sessions, manual_notes, chunks to authenticated;
 
 create or replace function set_updated_at()
 returns trigger
@@ -169,6 +227,11 @@ $$;
 drop trigger if exists chunks_set_updated_at on chunks;
 create trigger chunks_set_updated_at
 before update on chunks
+for each row execute function set_updated_at();
+
+drop trigger if exists manual_notes_set_updated_at on manual_notes;
+create trigger manual_notes_set_updated_at
+before update on manual_notes
 for each row execute function set_updated_at();
 
 commit;
