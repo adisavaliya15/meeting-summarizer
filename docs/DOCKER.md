@@ -25,6 +25,11 @@ Fill all values in `.env.docker`:
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
 
+Important for `SUPABASE_DB_URL`:
+
+- URL-encode password special characters.
+- If your password contains `$`, escape it as `$$` in `.env.docker` to avoid Docker Compose interpolation warnings/errors.
+
 Choose Ollama mode:
 
 - Local container Ollama: keep `OLLAMA_URL=http://ollama:11434`
@@ -107,11 +112,16 @@ docker compose up -d --scale worker=2
 - API unhealthy:
   - Check `docker compose logs api`
   - Verify `SUPABASE_DB_URL` connectivity and credentials.
+  - Check readiness endpoint: `http://localhost:8000/readyz` (must return 200 when DB is reachable).
 
 - Worker not processing:
   - Check `docker compose logs worker`
   - Confirm `OLLAMA_URL` is reachable from inside container.
   - If using local Ollama service, run with `--profile ollama`.
+
+- Repeated warning `The "k" variable is not set. Defaulting to a blank string.`:
+  - Usually means an unescaped `$` in `.env.docker` values.
+  - Escape each literal `$` as `$$`, then recreate containers.
 
 - Frontend auth/API errors:
   - Verify `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.

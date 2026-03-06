@@ -9,8 +9,17 @@ BEGIN
     CREATE TYPE job_type AS ENUM (
       'TRANSCRIBE_CHUNK',
       'SUMMARIZE_CHUNK',
-      'FINALIZE_SESSION'
+      'FINALIZE_SESSION',
+      'SUMMARIZE_NOTE'
     );
+  ELSIF NOT EXISTS (
+    SELECT 1
+    FROM pg_enum e
+    JOIN pg_type t on t.oid = e.enumtypid
+    WHERE t.typname = 'job_type'
+      AND e.enumlabel = 'SUMMARIZE_NOTE'
+  ) THEN
+    ALTER TYPE job_type ADD VALUE 'SUMMARIZE_NOTE';
   END IF;
 
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'job_status') THEN
@@ -126,6 +135,11 @@ create unique index if not exists jobs_active_chunk_unique
 create unique index if not exists jobs_active_finalize_unique
   on jobs ((payload->>'session_id'), type)
   where type = 'FINALIZE_SESSION'
+    and status in ('PENDING', 'RUNNING');
+
+create unique index if not exists jobs_active_note_summary_unique
+  on jobs ((payload->>'note_id'), type)
+  where payload ? 'note_id'
     and status in ('PENDING', 'RUNNING');
 
 alter table sessions enable row level security;

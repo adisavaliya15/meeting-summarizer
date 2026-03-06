@@ -1,7 +1,6 @@
 import uuid
 from typing import Any
 
-import requests
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from psycopg.errors import UniqueViolation
@@ -17,7 +16,6 @@ from .models import (
     NoteUpdateRequest,
     SessionCreateRequest,
 )
-from .notes_summary import render_manual_note_summary_markdown, summarize_manual_note
 from .supabase_storage import create_signed_upload_url, delete_storage_object
 
 validate_settings()
@@ -36,6 +34,19 @@ app.add_middleware(
 @app.get("/healthz")
 def healthz() -> dict[str, Any]:
     return {"ok": True, "service": "meeting-summarizer-api"}
+
+
+@app.get("/readyz")
+def readyz() -> dict[str, Any]:
+    try:
+        with get_db_conn() as conn:
+            conn.execute("select 1")
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database is not reachable",
+        ) from exc
+    return {"ok": True, "service": "meeting-summarizer-api", "db": "reachable"}
 
 
 @app.get("/api/health")
@@ -174,28 +185,6 @@ def update_note(
     return {"note": note}
 
 
-@app.delete("/api/notes/{note_id}")
-def delete_note(
-    note_id: uuid.UUID,
-    current_user: CurrentUser = Depends(get_current_user),
-) -> dict[str, Any]:
-    with get_db_conn() as conn:
-        note = conn.execute(
-            """
-            delete from manual_notes
-            where id = %s
-              and owner_id = %s
-            returning id
-            """,
-            (note_id, current_user.id),
-        ).fetchone()
-        if not note:
-            conn.rollback()
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Note not found")
-        conn.commit()
-    return {"deleted": True, "note_id": str(note_id)}
-
-
 @app.post("/api/notes/{note_id}/summarize")
 def summarize_note(
     note_id: uuid.UUID,
@@ -218,30 +207,77 @@ def summarize_note(
         if not content.strip():
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Note is empty")
 
-        try:
-            summary = summarize_manual_note(content)
-        except requests.RequestException as exc:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="Failed to summarize note. Verify OLLAMA_URL and OLLAMA_MODEL.",
-            ) from exc
-
-        summary_md = render_manual_note_summary_markdown(summary)
-        updated = conn.execute(
+        existing_job = conn.execute(
             """
-            update manual_notes
-            set summary = %s,
-                summary_md = %s,
-                summarized_at = now()
-            where id = %s
-              and owner_id = %s
+            select id, status
+            from jobs
+            where owner_id = %s
+              and type = 'SUMMARIZE_NOTE'
+              and status in ('PENDING', 'RUNNING')
+              and payload->>'note_id' = %s
+            order by created_at desc
+            limit 1
+            """,
+            (current_user.id, str(note_id)),
+        ).fetchone()
+
+        if existing_job:
+            return {
+                "job": existing_job,
+                "queued": False,
+                "already_queued": True,
+                "note_id": str(note_id),
+            }
+
+        job = conn.execute(
+            """
+            insert into jobs (owner_id, type, status, payload)
+            values (%s, 'SUMMARIZE_NOTE', 'PENDING', %s)
             returning *
             """,
-            (Json(summary), summary_md, note_id, current_user.id),
+            (current_user.id, Json({"note_id": str(note_id)})),
         ).fetchone()
         conn.commit()
 
-    return {"note": updated}
+    return {
+        "job": job,
+        "queued": True,
+        "already_queued": False,
+        "note_id": str(note_id),
+    }
+
+
+@app.delete("/api/notes/{note_id}")
+def delete_note(
+    note_id: uuid.UUID,
+    current_user: CurrentUser = Depends(get_current_user),
+) -> dict[str, Any]:
+    with get_db_conn() as conn:
+        conn.execute(
+            """
+            delete from jobs
+            where owner_id = %s
+              and type = 'SUMMARIZE_NOTE'
+              and payload->>'note_id' = %s
+            """,
+            (current_user.id, str(note_id)),
+        )
+
+        note = conn.execute(
+            """
+            delete from manual_notes
+            where id = %s
+              and owner_id = %s
+            returning id
+            """,
+            (note_id, current_user.id),
+        ).fetchone()
+        if not note:
+            conn.rollback()
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Note not found")
+        conn.commit()
+
+    return {"deleted": True, "note_id": str(note_id)}
 
 
 @app.post("/api/sessions")

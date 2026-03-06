@@ -3,7 +3,7 @@ import traceback
 
 from app.config import settings, validate_settings
 from app.db import claim_next_job, get_conn, mark_job_done, mark_job_retry_or_failed, recover_stale_jobs
-from app.handlers import handle_finalize_session, handle_summarize_chunk, handle_transcribe_chunk
+from app.handlers import handle_finalize_session, handle_summarize_chunk, handle_summarize_note, handle_transcribe_chunk
 
 
 def _process_job(job: dict):
@@ -18,6 +18,8 @@ def _process_job(job: dict):
             handle_summarize_chunk(conn, payload)
         elif job_type == "FINALIZE_SESSION":
             handle_finalize_session(conn, payload)
+        elif job_type == "SUMMARIZE_NOTE":
+            handle_summarize_note(conn, payload)
         else:
             raise ValueError(f"Unsupported job type: {job_type}")
 

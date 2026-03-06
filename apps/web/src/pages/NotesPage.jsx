@@ -12,6 +12,8 @@ import Textarea from "../components/ui/Textarea";
 import { useToast } from "../components/ui/ToastProvider";
 
 const AUTOSAVE_DELAY_MS = 1200;
+const SUMMARY_POLL_INTERVAL_MS = 2500;
+const SUMMARY_POLL_ATTEMPTS = 48;
 const DEFAULT_NOTE_TITLE = "Untitled note";
 
 function formatSavedAt(value) {
@@ -28,6 +30,12 @@ function formatSavedAt(value) {
 function summaryFromNote(note) {
   const value = note?.summary;
   return value && typeof value === "object" ? value : null;
+}
+
+function delay(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 function SummaryList({ title, items }) {
@@ -352,22 +360,50 @@ export default function NotesPage({ session }) {
     }
 
     try {
+      const noteId = selectedNoteId;
       await flushCurrentNote();
       setIsSummarizing(true);
-      const data = await apiFetch(`/api/notes/${selectedNoteId}/summarize`, token, { method: "POST" });
-      const row = data.note || null;
-      if (!row) {
-        return;
+      const requestStartedAtMs = Date.now();
+      const data = await apiFetch(`/api/notes/${noteId}/summarize`, token, { method: "POST" });
+      if (data?.already_queued) {
+        pushToast("Summary is already in progress.", "info");
+      } else {
+        pushToast("Summary queued. Worker is processing it.", "info");
       }
-      setNotes((previous) => {
-        const next = previous.map((item) => (item.id === row.id ? row : item));
-        next.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
-        return next;
-      });
-      if (row.id === selectedNoteId) {
-        applySelectedDraft(row);
+
+      let summarizedNote = null;
+      for (let attempt = 0; attempt < SUMMARY_POLL_ATTEMPTS; attempt += 1) {
+        await delay(SUMMARY_POLL_INTERVAL_MS);
+        const noteData = await apiFetch(`/api/notes/${noteId}`, token);
+        const row = noteData.note || null;
+        if (!row) {
+          continue;
+        }
+
+        setNotes((previous) => {
+          const exists = previous.some((item) => item.id === row.id);
+          const next = exists
+            ? previous.map((item) => (item.id === row.id ? row : item))
+            : [row, ...previous];
+          next.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+          return next;
+        });
+        if (row.id === selectedNoteIdRef.current) {
+          applySelectedDraft(row);
+        }
+
+        const summarizedAtMs = row.summarized_at ? new Date(row.summarized_at).getTime() : 0;
+        if (row.summary && summarizedAtMs >= requestStartedAtMs - 1000) {
+          summarizedNote = row;
+          break;
+        }
       }
-      pushToast("Note summarized", "success");
+
+      if (summarizedNote) {
+        pushToast("Note summarized", "success");
+      } else {
+        pushToast("Summary is still running. Refresh in a moment.", "info");
+      }
     } catch (err) {
       const message = err.message || "Failed to summarize note";
       setError(message);

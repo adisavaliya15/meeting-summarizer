@@ -13,7 +13,7 @@ services:
       - "8000:8000"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=5)"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/readyz', timeout=5)"]
       interval: 20s
       timeout: 5s
       retries: 5
@@ -30,9 +30,6 @@ services:
       HF_HOME: /models/hf
     volumes:
       - hf_cache:/models/hf
-    depends_on:
-      api:
-        condition: service_healthy
     restart: unless-stopped
 
   web:

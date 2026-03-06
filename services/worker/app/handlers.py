@@ -3,16 +3,20 @@ from pathlib import Path
 from psycopg.types.json import Json
 
 from .finalize import finalize_session_summary, render_final_summary_markdown
+from .notes_summary import render_manual_note_summary_markdown, summarize_manual_note
 from .storage import download_object
 from .summarize import summarize_chunk_transcript
 from .transcribe import transcribe_audio
 
 
 def _enqueue_job_if_missing(conn, owner_id: str, job_type: str, payload: dict):
-    if job_type == "FINALIZE_SESSION":
-        key_name = "session_id"
-    else:
-        key_name = "chunk_id"
+    key_name_by_type = {
+        "TRANSCRIBE_CHUNK": "chunk_id",
+        "SUMMARIZE_CHUNK": "chunk_id",
+        "FINALIZE_SESSION": "session_id",
+        "SUMMARIZE_NOTE": "note_id",
+    }
+    key_name = key_name_by_type.get(job_type, "chunk_id")
 
     key_val = str(payload.get(key_name))
     existing = conn.execute(
@@ -170,5 +174,42 @@ def handle_finalize_session(conn, job_payload: dict):
         where id = %s
         """,
         (Json(final_summary), final_summary_md, session_id),
+    )
+    conn.commit()
+
+
+def handle_summarize_note(conn, job_payload: dict):
+    note_id = job_payload.get("note_id")
+    if not note_id:
+        raise ValueError("SUMMARIZE_NOTE payload missing note_id")
+
+    note = conn.execute(
+        """
+        select id, content
+        from manual_notes
+        where id = %s
+        """,
+        (note_id,),
+    ).fetchone()
+
+    if not note:
+        raise ValueError(f"Note {note_id} not found")
+
+    content = str(note.get("content") or "")
+    if not content.strip():
+        raise ValueError(f"Note {note_id} is empty")
+
+    summary = summarize_manual_note(content)
+    summary_md = render_manual_note_summary_markdown(summary)
+
+    conn.execute(
+        """
+        update manual_notes
+        set summary = %s,
+            summary_md = %s,
+            summarized_at = now()
+        where id = %s
+        """,
+        (Json(summary), summary_md, note_id),
     )
     conn.commit()
