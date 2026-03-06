@@ -33,6 +33,11 @@ app.add_middleware(
 )
 
 
+@app.get("/healthz")
+def healthz() -> dict[str, Any]:
+    return {"ok": True, "service": "meeting-summarizer-api"}
+
+
 @app.get("/api/health")
 def health(current_user: CurrentUser = Depends(get_current_user)) -> dict[str, Any]:
     return {"ok": True, "service": "meeting-summarizer-api", "user_id": current_user.id}

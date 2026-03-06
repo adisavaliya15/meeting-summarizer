@@ -9,6 +9,7 @@
 
 # Env files
 **/.env
+**/.env.docker
 
 # OS
 .DS_Store

@@ -10,6 +10,20 @@ meeting-summarizer/
   services/api            # FastAPI service (Render-compatible)
   services/worker         # Local laptop Python worker
   supabase/schema.sql     # DB schema, enums, indexes, RLS policies
+  docs/DOCKER.md          # Docker Compose deployment guide
+```
+
+## Docker Quick Start
+
+For containerized deployment (web + api + worker + optional ollama), use:
+
+- [docs/DOCKER.md](docs/DOCKER.md)
+
+Quick command:
+
+```bash
+cp .env.docker.example .env.docker
+docker compose --env-file .env.docker --profile ollama up --build -d
 ```
 
 ## What This App Does
@@ -362,6 +376,7 @@ You should see logs like:
 ## API Route Reference
 
 - `GET /api/health`
+- `GET /healthz`
 - `GET /api/notes`
 - `POST /api/notes`
 - `GET /api/notes/{note_id}`
