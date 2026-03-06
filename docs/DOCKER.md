@@ -118,6 +118,7 @@ docker compose up -d --scale worker=2
   - Check `docker compose logs worker`
   - Confirm `OLLAMA_URL` is reachable from inside container.
   - If using local Ollama service, run with `--profile ollama`.
+  - If long note/chunk/session summaries time out, increase `OLLAMA_TIMEOUT_SEC` in `.env.docker` (example: `1500`).
 
 - Repeated warning `The "k" variable is not set. Defaulting to a blank string.`:
   - Usually means an unescaped `$` in `.env.docker` values.

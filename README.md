@@ -326,6 +326,7 @@ Set `services/worker/.env` values:
 - `OLLAMA_URL` (default `http://localhost:11434`)
 - `WHISPER_MODEL` (default `large-v3`, use `large-v3-turbo` for faster processing if available)
 - `OLLAMA_MODEL` (model served by your Ollama endpoint)
+- `OLLAMA_TIMEOUT_SEC` (default `1500`, increase for long notes/summaries)
 - `POLL_INTERVAL_SEC`, `MAX_ATTEMPTS`, `WORKER_ID`
 
 Run worker:
@@ -532,5 +533,3 @@ Install command (already applied in this repo):
 cd apps/web
 npm install framer-motion lucide-react @radix-ui/react-dialog @radix-ui/react-tabs @radix-ui/react-dropdown-menu @radix-ui/react-tooltip class-variance-authority tailwind-merge tailwindcss-animate embla-carousel-react react-hot-toast
 ```
-
-

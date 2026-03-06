@@ -16,6 +16,7 @@ class Settings:
     ollama_url: str
     whisper_model: str
     ollama_model: str
+    ollama_timeout_sec: int
     poll_interval_sec: int
     max_attempts: int
     worker_id: str
@@ -28,6 +29,7 @@ settings = Settings(
     ollama_url=os.getenv("OLLAMA_URL", "http://localhost:11434").rstrip("/"),
     whisper_model=os.getenv("WHISPER_MODEL", "large-v3"),
     ollama_model=os.getenv("OLLAMA_MODEL", "llama3.1:8b"),
+    ollama_timeout_sec=int(os.getenv("OLLAMA_TIMEOUT_SEC", "1500")),
     poll_interval_sec=int(os.getenv("POLL_INTERVAL_SEC", "5")),
     max_attempts=int(os.getenv("MAX_ATTEMPTS", "3")),
     worker_id=os.getenv("WORKER_ID", f"{socket.gethostname()}-worker"),

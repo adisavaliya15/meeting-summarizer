@@ -47,7 +47,11 @@ def _call_ollama_json(prompt: str) -> dict[str, Any]:
             "temperature": 0.2,
         },
     }
-    response = requests.post(f"{settings.ollama_url}/api/generate", json=payload)
+    response = requests.post(
+        f"{settings.ollama_url}/api/generate",
+        json=payload,
+        timeout=settings.ollama_timeout_sec,
+    )
     response.raise_for_status()
 
     raw = response.json().get("response", "{}")
