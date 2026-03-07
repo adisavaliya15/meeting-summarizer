@@ -151,18 +151,6 @@ def update_note(
             update manual_notes
             set title = %s,
                 content = %s,
-                summary = case
-                  when manual_notes.content is distinct from %s then null
-                  else manual_notes.summary
-                end,
-                summary_md = case
-                  when manual_notes.content is distinct from %s then null
-                  else manual_notes.summary_md
-                end,
-                summarized_at = case
-                  when manual_notes.content is distinct from %s then null
-                  else manual_notes.summarized_at
-                end,
                 updated_at = now()
             where id = %s
               and owner_id = %s
@@ -170,9 +158,6 @@ def update_note(
             """,
             (
                 _normalize_note_title(body.title),
-                body.content,
-                body.content,
-                body.content,
                 body.content,
                 note_id,
                 current_user.id,

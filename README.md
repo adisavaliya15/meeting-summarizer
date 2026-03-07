@@ -40,7 +40,7 @@ docker volume create meeting-ollama-data
 
 # 2) Optional: run Ollama container (if using local Ollama)
 docker run -d --name meeting-ollama --network meeting-net --network-alias ollama -p 11434:11434 -v meeting-ollama-data:/root/.ollama ollama/ollama:latest
-docker exec -it meeting-ollama ollama pull llama3.1:8b
+docker exec -it meeting-ollama ollama pull llama3.2:3b
 
 # 3) Build images
 docker build -t meeting-summarizer-api -f services/api/Dockerfile .
@@ -103,9 +103,11 @@ This is the exact flow after clicking **Record Next Chunk** and then **Stop Reco
 2. Worker downloads raw bytes and writes a temporary `.webm` file.
 3. `faster-whisper` reads that file and decodes audio (via ffmpeg backend).
 4. Model returns:
+
 - detected language
 - full text
 - timestamped segments (`start`, `end`, `text`)
+
 5. Worker saves this structure to `chunks.transcript` (JSONB).
 
 Example transcript JSON shape:
@@ -116,9 +118,7 @@ Example transcript JSON shape:
   "language_probability": 0.99,
   "duration": 602.41,
   "text": "...full chunk text...",
-  "segments": [
-    { "start": 0.0, "end": 4.2, "text": "..." }
-  ]
+  "segments": [{ "start": 0.0, "end": 4.2, "text": "..." }]
 }
 ```
 
@@ -287,7 +287,7 @@ Set `services/api/.env` values:
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `SUPABASE_DB_URL`
 - `OLLAMA_URL` (default `http://localhost:11434`)
-- `OLLAMA_MODEL` (default `llama3.1:8b`)
+- `OLLAMA_MODEL` (default `llama3.2:3b`)
 - `CORS_ORIGINS` (for local web app: `http://localhost:5173`)
 
 DB URL note:
@@ -373,6 +373,7 @@ Open `http://localhost:5173`.
 ### Browser checks
 
 1. On stop recording, network should show:
+
 - `POST /api/sessions/{id}/chunks/init` -> 200
 - `PUT <signed storage URL>` -> 200
 - `POST /api/chunks/{id}/uploaded` -> 200
@@ -397,17 +398,21 @@ You should see logs like:
 ## Common Issues
 
 1. `WAITING_UPLOAD` stuck:
+
 - signed upload URL failed or upload PUT failed.
 - check browser network for init/upload/uploaded sequence.
 
 2. Upload OPTIONS 404:
+
 - signed URL missing `/storage/v1` path.
 - restart API after latest code changes.
 
 3. DB `getaddrinfo failed`:
+
 - use Supabase pooler host (`...pooler.supabase.com:6543`) instead of direct `db.<project-ref>.supabase.co:5432`.
 
 4. HuggingFace symlink warning on Windows:
+
 - warning only; processing still works.
 - optional: set `HF_HUB_DISABLE_SYMLINKS_WARNING=1`.
 

@@ -32,6 +32,7 @@ QUALITY RULES
 - Remove filler, repetition, and small talk.
 - Keep the total output concise unless the user asks for more.
 - If the transcript is very long, prioritize the most important items and group similar points.
+- Write clearly in English even if the transcript contains multiple languages.
 
 ERROR HANDLING
 - If the input is not a transcript, respond in English.

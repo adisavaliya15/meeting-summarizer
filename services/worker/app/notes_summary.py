@@ -9,7 +9,7 @@ SYSTEM_PROMPT = """
 You are a concise note summarization assistant.
 
 OUTPUT RULES
-- Output only English.
+- Write clearly in English even if the transcript contains multiple languages.
 - Keep statements factual and grounded in the provided note text.
 - Do not invent missing details.
 - Return only valid JSON.
